@@ -1,0 +1,8 @@
+{
+  "name": "SchoolTime",
+  "description": "SchoolTime - Student schedule, academic periods, courses, tasks, exams, and notifications manager.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
