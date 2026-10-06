@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -32,12 +33,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.floresvalle.schooltime.R
 import com.floresvalle.schooltime.util.AuthPreferences
 import kotlinx.coroutines.launch
 
@@ -45,14 +49,8 @@ data class OnboardingStep(
     val title: String,
     val subtitle: String,
     val badge: String,
-    val illustrationType: IllustrationType
+    val imageResId: Int
 )
-
-enum class IllustrationType {
-    STUDENT_JOURNEY,
-    SCHEDULE_CALENDAR,
-    ACADEMIC_PERFORMANCE
-}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -68,19 +66,19 @@ fun OnboardingScreen(
                 title = "¡Encantados de Acompañar Tu Camino!",
                 subtitle = "Organiza tus cursos, horarios y evaluaciones universitarias en una sola aplicación moderna y potente.",
                 badge = "BIENVENIDO A SCHOOLTIME",
-                illustrationType = IllustrationType.STUDENT_JOURNEY
+                imageResId = R.drawable.img_onboarding_1
             ),
             OnboardingStep(
                 title = "Horarios y Calendario sin Conflictos",
                 subtitle = "Visualiza tus clases semanales por colores, aulas, docentes y fechas de ciclo con sincronización automática.",
                 badge = "GESTIÓN DE HORARIOS",
-                illustrationType = IllustrationType.SCHEDULE_CALENDAR
+                imageResId = R.drawable.img_onboarding_2
             ),
             OnboardingStep(
                 title = "Domina Tus Tareas y Promedio Real",
                 subtitle = "Calcula tu promedio ponderado de ciclo, registra entregas con recordatorios y lleva el control total de tus notas.",
                 badge = "RENDIMIENTO ACADÉMICO",
-                illustrationType = IllustrationType.ACADEMIC_PERFORMANCE
+                imageResId = R.drawable.img_onboarding_3
             )
         )
     }
@@ -117,13 +115,30 @@ fun OnboardingScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
-                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                            .padding(horizontal = 24.dp, vertical = 12.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        when (step.illustrationType) {
-                            IllustrationType.STUDENT_JOURNEY -> StudentJourneyIllustration()
-                            IllustrationType.SCHEDULE_CALENDAR -> ScheduleCalendarIllustration()
-                            IllustrationType.ACADEMIC_PERFORMANCE -> AcademicPerformanceIllustration()
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight(0.92f)
+                                .shadow(
+                                    elevation = 10.dp,
+                                    shape = RoundedCornerShape(28.dp),
+                                    ambientColor = Color.Black.copy(alpha = 0.10f),
+                                    spotColor = Color.Black.copy(alpha = 0.20f)
+                                ),
+                            shape = RoundedCornerShape(28.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                        ) {
+                            Image(
+                                painter = painterResource(id = step.imageResId),
+                                contentDescription = step.title,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(28.dp)),
+                                contentScale = ContentScale.Crop
+                            )
                         }
                     }
                 }
