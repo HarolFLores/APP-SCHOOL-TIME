@@ -17,10 +17,10 @@ data class CountryPhoneCode(
 
 object AuthValidation {
     val SUPPORTED_COUNTRIES = listOf(
-        CountryPhoneCode("PE", "Perú", "+51", "🇵🇪", 9, "987 654 321"),
-        CountryPhoneCode("CO", "Colombia", "+57", "🇨🇴", 10, "300 123 4567"),
-        CountryPhoneCode("MX", "México", "+52", "🇲🇽", 10, "55 1234 5678"),
-        CountryPhoneCode("AR", "Argentina", "+54", "🇦🇷", 10, "11 1234 5678"),
+        CountryPhoneCode("PE", "Perú", "+51", "🇵🇪", 9, "999 999 99"),
+        CountryPhoneCode("CO", "Colombia", "+57", "🇨🇴", 10, "300 300 0000"),
+        CountryPhoneCode("MX", "México", "+52", "🇲🇽", 10, "55 5555 5555"),
+        CountryPhoneCode("AR", "Argentina", "+54", "🇦🇷", 10, "11 1111 1111"),
         CountryPhoneCode("CL", "Chile", "+56", "🇨🇱", 9, "9 1234 5678"),
         CountryPhoneCode("EC", "Ecuador", "+593", "🇪🇨", 9, "9 1234 5678"),
         CountryPhoneCode("BO", "Bolivia", "+591", "🇧🇴", 8, "7123 4567"),
@@ -32,11 +32,12 @@ object AuthValidation {
         CountryPhoneCode("PY", "Paraguay", "+595", "🇵🇾", 9, "981 123 456"),
         CountryPhoneCode("PA", "Panamá", "+507", "🇵🇦", 8, "6123 4567"),
         CountryPhoneCode("CR", "Costa Rica", "+506", "🇨🇷", 8, "8123 4567"),
-        CountryPhoneCode("DO", "Rep. Dominicana", "+1", "🇩🇴", 10, "809 123 4567"),
-        CountryPhoneCode("GT", "Guatemala", "+502", "🇬🇹", 8, "5123 4567")
+        CountryPhoneCode("DO", "Rep. Dominicana", "+1", "🇩🇴", 10, "809 111 1111"),
+        CountryPhoneCode("GT", "Guatemala", "+502", "🇬🇹", 8, "5555 5555")
     )
 
     val PREDEFINED_CAREERS = listOf(
+        "Selecciona tu carrera",
         "Ingeniería de Sistemas",
         "Ingeniería de Software",
         "Ingeniería Informática",

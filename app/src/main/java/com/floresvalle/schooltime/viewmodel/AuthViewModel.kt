@@ -119,21 +119,24 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 val credentialManager = CredentialManager.create(targetContext)
                 val webClientId = context.getString(R.string.default_web_client_id)
 
-                val signInWithGoogleOption = GetSignInWithGoogleOption.Builder(webClientId)
-                    .build()
-
-                val googleIdOption = GetGoogleIdOption.Builder()
-                    .setFilterByAuthorizedAccounts(false)
-                    .setServerClientId(webClientId)
-                    .setAutoSelectEnabled(false)
-                    .build()
-
-                val request = GetCredentialRequest.Builder()
-                    .addCredentialOption(signInWithGoogleOption)
-                    .addCredentialOption(googleIdOption)
-                    .build()
-
-                val result = credentialManager.getCredential(targetContext, request)
+                val result = try {
+                    val googleIdOption = GetGoogleIdOption.Builder()
+                        .setFilterByAuthorizedAccounts(false)
+                        .setServerClientId(webClientId)
+                        .setAutoSelectEnabled(false)
+                        .build()
+                    val request = GetCredentialRequest.Builder()
+                        .addCredentialOption(googleIdOption)
+                        .build()
+                    credentialManager.getCredential(targetContext, request)
+                } catch (_: Exception) {
+                    val signInWithGoogleOption = GetSignInWithGoogleOption.Builder(webClientId)
+                        .build()
+                    val fallbackRequest = GetCredentialRequest.Builder()
+                        .addCredentialOption(signInWithGoogleOption)
+                        .build()
+                    credentialManager.getCredential(targetContext, fallbackRequest)
+                }
 
                 val extracted = extractGoogleCredentialDetails(result.credential)
                 val targetEmail = extracted?.email?.takeIf { it.isNotBlank() }

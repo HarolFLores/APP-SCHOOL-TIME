@@ -273,7 +273,7 @@ fun ClassForm(
     ) {
         // Course Name
         Text(
-            text = "Nombre de la Asignatura *",
+            text = "Nombre de la Asignatura:",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold
         )
@@ -281,7 +281,7 @@ fun ClassForm(
         OutlinedTextField(
             value = courseName,
             onValueChange = { courseName = it },
-            placeholder = { Text("Ej. Seguridad Informática") },
+            placeholder = { Text("Curso/Asignatura") },
             leadingIcon = {
                 Icon(Icons.Default.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             },
@@ -294,7 +294,7 @@ fun ClassForm(
 
         // Docente Name
         Text(
-            text = "Nombre del Docente (Opcional)",
+            text = "Nombre del Docente (Opcional):",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold
         )
@@ -302,7 +302,7 @@ fun ClassForm(
         OutlinedTextField(
             value = docente,
             onValueChange = { docente = it },
-            placeholder = { Text("Ej. Dra. Claudia Benítez") },
+            placeholder = { Text("Ing. Docente") },
             leadingIcon = {
                 Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             },
@@ -399,7 +399,7 @@ fun ClassForm(
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        "Modalidad 100% Virtual / En línea. No es necesario ingresar ningún enlace para agendar tu horario.",
+                        "Modalidad 100% Virtual / En línea.",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF006064)
                     )
@@ -416,7 +416,7 @@ fun ClassForm(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Hora Inicio *",
+                    text = "Hora Inicio:",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -425,7 +425,7 @@ fun ClassForm(
                     value = startTime,
                     onValueChange = { },
                     readOnly = true,
-                    placeholder = { Text("08:00") },
+                    placeholder = { Text("00:00") },
                     trailingIcon = {
                         Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     },
@@ -444,7 +444,7 @@ fun ClassForm(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Hora Fin *",
+                    text = "Hora Fin:",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -453,7 +453,7 @@ fun ClassForm(
                     value = endTime,
                     onValueChange = { },
                     readOnly = true,
-                    placeholder = { Text("10:00") },
+                    placeholder = { Text("00:00") },
                     trailingIcon = {
                         Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     },
@@ -477,7 +477,7 @@ fun ClassForm(
         // Día Semanal
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = "Día Semanal de la Clase",
+                text = "Día Semanal de la Clase:",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -630,7 +630,7 @@ fun TaskForm(
             .verticalScroll(rememberScrollState())
     ) {
         Text(
-            text = "Curso / Asignatura Asociada *",
+            text = "Curso / Asignatura Asociada:",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold
         )
@@ -640,7 +640,7 @@ fun TaskForm(
             OutlinedTextField(
                 value = courseName,
                 onValueChange = { courseName = it },
-                placeholder = { Text("Ej. Matemática Discreta") },
+                placeholder = { Text("Curso/Asignatura") },
                 leadingIcon = {
                     Icon(Icons.Default.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 },
@@ -690,7 +690,7 @@ fun TaskForm(
         Spacer(modifier = Modifier.height(14.dp))
 
         Text(
-            text = "Título de la Tarea / Trabajo *",
+            text = "Título de la Tarea / Trabajo:",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold
         )
@@ -698,7 +698,7 @@ fun TaskForm(
         OutlinedTextField(
             value = title,
             onValueChange = { title = it },
-            placeholder = { Text("Ej. Informe del Laboratorio 3") },
+            placeholder = { Text("Tarea/Trabajo") },
             leadingIcon = {
                 Icon(Icons.Default.Assignment, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             },
@@ -710,7 +710,7 @@ fun TaskForm(
         Spacer(modifier = Modifier.height(14.dp))
 
         Text(
-            text = "Fecha de Entrega *",
+            text = "Fecha de Entrega:",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold
         )
@@ -739,7 +739,7 @@ fun TaskForm(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Prioridad / Nivel de Urgencia",
+            text = "Prioridad / Nivel de Urgencia:",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold
         )
@@ -890,7 +890,7 @@ fun ExamForm(
             .verticalScroll(rememberScrollState())
     ) {
         Text(
-            text = "Curso / Asignatura *",
+            text = "Curso / Asignatura:",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold
         )
@@ -900,7 +900,7 @@ fun ExamForm(
             OutlinedTextField(
                 value = courseName,
                 onValueChange = { courseName = it },
-                placeholder = { Text("Ej. Cálculo de una Variable") },
+                placeholder = { Text("Curso/Asignatura") },
                 leadingIcon = {
                     Icon(Icons.Default.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 },
@@ -950,7 +950,7 @@ fun ExamForm(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Tipo de Evaluación *",
+            text = "Tipo de Evaluación:",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold
         )
@@ -1022,7 +1022,7 @@ fun ExamForm(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Fecha de la Prueba *",
+            text = "Fecha de la Prueba:",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold
         )

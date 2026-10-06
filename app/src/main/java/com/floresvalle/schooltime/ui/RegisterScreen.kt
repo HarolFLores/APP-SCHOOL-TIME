@@ -657,7 +657,7 @@ fun RegisterScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Form Fields: Nombres & Apellidos (Bloqueo absoluto de números)
-            Text("Nombres *", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("Nombres:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
             OutlinedTextField(
                 value = firstName,
@@ -667,7 +667,7 @@ fun RegisterScreen(
                         firstNameError = AuthValidation.requiredNameError(firstName, "nombres")
                     }
                 },
-                placeholder = { Text("Ej. Harol") },
+                placeholder = { Text("Nombres:") },
                 leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(20.dp)) },
                 singleLine = true,
                 isError = attemptedSubmit && firstNameError != null,
@@ -678,7 +678,7 @@ fun RegisterScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text("Apellidos *", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("Apellidos:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
             OutlinedTextField(
                 value = lastName,
@@ -688,7 +688,7 @@ fun RegisterScreen(
                         lastNameError = AuthValidation.requiredNameError(lastName, "apellidos")
                     }
                 },
-                placeholder = { Text("Ej. Flores Valle") },
+                placeholder = { Text("Apellidos") },
                 leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, modifier = Modifier.size(20.dp)) },
                 singleLine = true,
                 isError = attemptedSubmit && lastNameError != null,
@@ -700,7 +700,7 @@ fun RegisterScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Email (LOCKED for Google, editable for Email sign up)
-            Text("Correo Electrónico *", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("Correo Electrónico:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
             OutlinedTextField(
                 value = email,
@@ -720,7 +720,7 @@ fun RegisterScreen(
                 } else if (isGoogleSignUp) {
                     { Text("Verificado con Google (no modificable)") }
                 } else {
-                    { Text("Debe incluir '@' y dominio completo (ej. @gmail.com, @hotmail.com, @uni.edu.pe)") }
+                    { Text("Debe incluir '@' y dominio completo.") }
                 },
                 placeholder = { Text("ejemplo@gmail.com") },
                 leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(20.dp)) },
@@ -733,7 +733,7 @@ fun RegisterScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Teléfono Celular con Código de País (Solo números, longitud controlada)
-            Text("Teléfono celular *", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("Teléfono celular:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
             OutlinedTextField(
                 value = phone,
@@ -764,7 +764,7 @@ fun RegisterScreen(
                 supportingText = if (attemptedSubmit && phoneError != null) {
                     { Text(phoneError ?: "") }
                 } else {
-                    { Text("${selectedCountry.name} (${selectedCountry.dialCode}): ${phone.length}/${selectedCountry.expectedLength} dígitos (solo números)") }
+                    { Text("${selectedCountry.name} (${selectedCountry.dialCode}): ${phone.length}/${selectedCountry.expectedLength} dígitos") }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -774,7 +774,7 @@ fun RegisterScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Carrera Profesional: Dropdown Select con "Otra (Especificar)"
-            Text("Carrera Profesional *", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("Carrera Profesional:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
             ExposedDropdownMenuBox(
                 expanded = careerExpanded,
@@ -816,7 +816,7 @@ fun RegisterScreen(
 
             if (selectedCareer.startsWith("Otra", ignoreCase = true)) {
                 Spacer(modifier = Modifier.height(10.dp))
-                Text("Escribe tu carrera profesional *", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF006C88))
+                Text("Escribe tu carrera profesional:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF006C88))
                 Spacer(modifier = Modifier.height(4.dp))
                 OutlinedTextField(
                     value = customCareer,
@@ -826,7 +826,7 @@ fun RegisterScreen(
                             careerError = AuthValidation.careerError(customCareer)
                         }
                     },
-                    placeholder = { Text("Ej. Ingeniería Biomédica") },
+                    placeholder = { Text("Carrera Profesional") },
                     leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(20.dp)) },
                     singleLine = true,
                     isError = attemptedSubmit && careerError != null,
@@ -848,7 +848,7 @@ fun RegisterScreen(
                     Text("Periodo Académico (Ciclo)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Text("Semestre Académico *", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text("Semestre Académico:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(4.dp))
                     OutlinedTextField(
                         value = semester,
@@ -875,13 +875,13 @@ fun RegisterScreen(
                                 }
                             }
                         },
-                        placeholder = { Text("Ej. 2026-II") },
+                        placeholder = { Text("0000-II") },
                         singleLine = true,
                         isError = attemptedSubmit && semesterError != null,
                         supportingText = if (attemptedSubmit && semesterError != null) {
                             { Text(semesterError ?: "") }
                         } else {
-                            { Text("Escribe los 4 dígitos del año y se agregará '-' automáticamente. Luego solo ingresa 'I' o 'II'.") }
+                            { Text("Escribe los 4 dígitos del año") }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
@@ -917,7 +917,7 @@ fun RegisterScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Text("Duración Académica (16 semanas de estudio + 1 semana aplazados)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Duración Académica", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -965,7 +965,7 @@ fun RegisterScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     // MANDATORY CYCLE START & END DATES (Clickable overlay + Error validation)
-                    Text("Fecha de Inicio del Ciclo *", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text("Fecha de Inicio del Ciclo:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(4.dp))
                     Box(modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
@@ -974,7 +974,7 @@ fun RegisterScreen(
                             readOnly = true,
                             isError = attemptedSubmit && startDateError != null,
                             supportingText = if (attemptedSubmit) startDateError?.let { { Text(it) } } else null,
-                            placeholder = { Text("Ej. 2026-09-07") },
+                            placeholder = { Text("yy-MM-dd") },
                             leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = "Inicio de ciclo", tint = Color(0xFF006C88)) },
                             trailingIcon = {
                                 IconButton(onClick = { showStartDatePicker = true }) {
@@ -1001,7 +1001,7 @@ fun RegisterScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Text("Fecha de Fin del Ciclo *", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text("Fecha de Fin del Ciclo:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(4.dp))
                     Box(modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
@@ -1010,7 +1010,7 @@ fun RegisterScreen(
                             readOnly = true,
                             isError = attemptedSubmit && endDateError != null,
                             supportingText = if (attemptedSubmit) endDateError?.let { { Text(it) } } else null,
-                            placeholder = { Text("Ej. 2026-12-28") },
+                            placeholder = { Text("yy-MM-dd") },
                             leadingIcon = { Icon(Icons.Default.Event, contentDescription = "Fin de ciclo", tint = Color(0xFF006C88)) },
                             trailingIcon = {
                                 IconButton(onClick = { showEndDatePicker = true }) {
@@ -1066,7 +1066,7 @@ fun RegisterScreen(
 
             if (!isGoogleSignUp) {
                 // Password Section (Includes Strength Meter & Eye Icon Toggle)
-                Text("Contraseña *", style = MaterialTheme.typography.labelMedium)
+                Text("Contraseña:", style = MaterialTheme.typography.labelMedium)
                 Spacer(modifier = Modifier.height(4.dp))
                 OutlinedTextField(
                     value = password,
@@ -1122,7 +1122,7 @@ fun RegisterScreen(
 
                 val isConfirmPasswordError = confirmPassword.isNotEmpty() && confirmPassword != password
 
-                Text("Confirmar Contraseña *", style = MaterialTheme.typography.labelMedium)
+                Text("Confirmar Contraseña:", style = MaterialTheme.typography.labelMedium)
                 Spacer(modifier = Modifier.height(4.dp))
                 OutlinedTextField(
                     value = confirmPassword,
