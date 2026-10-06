@@ -236,9 +236,18 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             } catch (e: Exception) {
                 null
             }
-        }.filter { it.third.isAfter(now) }.sortedBy { it.second }
+        }.filter { it.third.isAfter(now) }.sortedWith(
+            compareBy<Triple<ClassSessionEntity, LocalDateTime, LocalDateTime>> { it.second }
+                .thenBy {
+                    // Prioritize: Presencial over Virtual if simultaneous, then alphabetical
+                    if (it.first.modality.equals("Presencial", ignoreCase = true)) 0 else 1
+                }
+                .thenBy { it.first.courseName }
+        )
 
-        val current = validSessions.firstOrNull { !it.second.isAfter(now) && it.third.isAfter(now) }
+        // If two classes are happening at the same time right now, prioritize Presencial then alphabetically
+        val ongoingSessions = validSessions.filter { !it.second.isAfter(now) && it.third.isAfter(now) }
+        val current = ongoingSessions.firstOrNull()
         if (current != null) {
             val minsLeft = ChronoUnit.MINUTES.between(now, current.third)
             return@combine NextClassState.InProgress(current.first, "$minsLeft min")

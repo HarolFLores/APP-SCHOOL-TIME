@@ -797,18 +797,10 @@ fun SessionCardItem(
             Spacer(modifier = Modifier.height(8.dp))
 
             if (isVirtual) {
-                if (!session.virtualUrl.isNullOrBlank()) {
-                    Button(
-                        onClick = { onOpenUrl(session.virtualUrl) },
-                        modifier = Modifier.fillMaxWidth().height(36.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Unirse a Videollamada", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.LaptopMac, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Clase Virtual / En línea", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {

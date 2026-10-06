@@ -60,17 +60,32 @@ class AlarmReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val soundUri = NotificationChannels.getSoundUri(context)
+
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_popup_reminder)
+            .setSmallIcon(com.floresvalle.schooltime.R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(message)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setSubText("SchoolTime • $category")
+            .setColor(0xFF006C88.toInt()) // Deep Teal brand color
+            .setColorized(true)
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .setBigContentTitle(title)
+                    .setSummaryText(category)
+                    .bigText(message)
+            )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setSound(soundUri)
+            .setVibrate(longArrayOf(0, 150, 100, 200, 100, 300))
+            .setLights(0xFF00E676.toInt(), 500, 1000)
             .setAutoCancel(true)
             .setContentIntent(appPendingIntent)
 
-        if (!virtualUrl.isNullOrBlank()) {
+        // For classes, never show a video call button because links were removed.
+        // For tasks with external links (e.g. drive/repo), provide the link button if it starts with http.
+        if (category != "Clases" && !virtualUrl.isNullOrBlank() && (virtualUrl.startsWith("http://") || virtualUrl.startsWith("https://"))) {
             val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(virtualUrl)).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
@@ -82,8 +97,8 @@ class AlarmReceiver : BroadcastReceiver() {
             )
 
             builder.addAction(
-                R.drawable.ic_menu_view,
-                "Unirse a Videollamada",
+                android.R.drawable.ic_menu_view,
+                "Ver Recurso",
                 openLinkPendingIntent
             )
         }

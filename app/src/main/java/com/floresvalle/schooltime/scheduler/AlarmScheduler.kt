@@ -24,8 +24,9 @@ class AlarmScheduler(private val context: Context) {
             val startDateTime = LocalDateTime.parse("${session.sessionDate} ${session.startTime}", formatter)
             val zoneId = ZoneId.systemDefault()
 
-            val locationText = if (session.modality.equals("Virtual", ignoreCase = true)) {
-                "Online (Meet)"
+            val isVirtual = session.modality.equals("Virtual", ignoreCase = true)
+            val locationText = if (isVirtual) {
+                "Modalidad Virtual"
             } else {
                 session.locationRoom ?: "Aula por definir"
             }
@@ -37,8 +38,8 @@ class AlarmScheduler(private val context: Context) {
                 scheduleSingleAlarm(
                     triggerEpochMillis = epoch2h,
                     title = "Clase próxima: ${session.courseName}",
-                    message = "Inicia a las ${session.startTime} en $locationText",
-                    virtualUrl = if (session.modality.equals("Virtual", true)) session.virtualUrl else null,
+                    message = if (isVirtual) "Tu clase inicia a las ${session.startTime} (100% Virtual)" else "Inicia a las ${session.startTime} en $locationText",
+                    virtualUrl = null,
                     notificationId = ("S2H_${session.id}").hashCode(),
                     category = "Clases",
                     userId = session.userId,
@@ -52,9 +53,9 @@ class AlarmScheduler(private val context: Context) {
                 val epoch15m = time15m.atZone(zoneId).toInstant().toEpochMilli()
                 scheduleSingleAlarm(
                     triggerEpochMillis = epoch15m,
-                    title = "Tu clase de ${session.courseName} está por comenzar",
-                    message = "Inicia en 15 minutos en $locationText. Haz clic para entrar.",
-                    virtualUrl = if (session.modality.equals("Virtual", true)) session.virtualUrl else null,
+                    title = "¡Tu clase de ${session.courseName} está por comenzar!",
+                    message = if (isVirtual) "Inicia en 15 minutos en modalidad virtual / online." else "Inicia en 15 minutos en $locationText.",
+                    virtualUrl = null,
                     notificationId = ("S15M_${session.id}").hashCode(),
                     category = "Clases",
                     userId = session.userId,

@@ -282,7 +282,10 @@ fun NotificationCardItem(
 
                 Text(notification.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-                if (!notification.virtualUrl.isNullOrBlank()) {
+                // Classes never show video call buttons (links were removed)
+                if (notification.category != "Clases" && !notification.virtualUrl.isNullOrBlank() &&
+                    (notification.virtualUrl.startsWith("http://") || notification.virtualUrl.startsWith("https://"))
+                ) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
                         onClick = { onOpenUrl(notification.virtualUrl) },
@@ -291,9 +294,9 @@ fun NotificationCardItem(
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                         modifier = Modifier.height(36.dp)
                     ) {
-                        Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Entrar a Videollamada", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text("Ver Recurso", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     }
                 }
 
