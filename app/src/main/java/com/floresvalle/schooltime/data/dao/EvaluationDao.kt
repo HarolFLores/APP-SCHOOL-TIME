@@ -37,6 +37,18 @@ interface EvaluationDao {
     @Query("UPDATE tasks SET dueDate = :dueDate, dueTime = :dueTime, updatedAt = :timestamp WHERE id = :taskId")
     suspend fun updateTaskDateTime(taskId: String, dueDate: String, dueTime: String, timestamp: Long = System.currentTimeMillis()): Int
 
+    @Query("UPDATE tasks SET title = :title, dueDate = :dueDate, dueTime = :dueTime, updatedAt = :timestamp WHERE id = :taskId")
+    suspend fun updateTaskDetails(taskId: String, title: String, dueDate: String, dueTime: String, timestamp: Long = System.currentTimeMillis()): Int
+
+    @Query("UPDATE tasks SET isDeleted = 1, updatedAt = :timestamp WHERE id = :taskId")
+    suspend fun softDeleteTask(taskId: String, timestamp: Long = System.currentTimeMillis()): Int
+
     @Query("UPDATE exams SET examDate = :examDate, examTime = :examTime, updatedAt = :timestamp WHERE id = :examId")
     suspend fun updateExamDateTime(examId: String, examDate: String, examTime: String, timestamp: Long = System.currentTimeMillis()): Int
+
+    @Query("UPDATE exams SET type = :type, examDate = :examDate, examTime = :examTime, updatedAt = :timestamp WHERE id = :examId")
+    suspend fun updateExamDetails(examId: String, type: String, examDate: String, examTime: String, timestamp: Long = System.currentTimeMillis()): Int
+
+    @Query("UPDATE exams SET isDeleted = 1, updatedAt = :timestamp WHERE id = :examId")
+    suspend fun softDeleteExam(examId: String, timestamp: Long = System.currentTimeMillis()): Int
 }

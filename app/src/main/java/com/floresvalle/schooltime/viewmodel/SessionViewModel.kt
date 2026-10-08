@@ -214,7 +214,7 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
     sealed class NextClassState {
         object None : NextClassState()
-        data class InProgress(val session: ClassSessionEntity, val timeRemainingText: String) : NextClassState()
+        data class InProgress(val sessions: List<ClassSessionEntity>, val timeRemainingText: String) : NextClassState()
         data class Imminent(val session: ClassSessionEntity, val timeUntilText: String) : NextClassState()
         data class Relaxed(val session: ClassSessionEntity, val futureDateText: String) : NextClassState()
     }
@@ -245,20 +245,35 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 .thenBy { it.first.courseName }
         )
 
-        // If two classes are happening at the same time right now, prioritize Presencial then alphabetically
+        // Clases que están ocurriendo ahora mismo simultáneamente
         val ongoingSessions = validSessions.filter { !it.second.isAfter(now) && it.third.isAfter(now) }
-        val current = ongoingSessions.firstOrNull()
-        if (current != null) {
-            val minsLeft = ChronoUnit.MINUTES.between(now, current.third)
-            return@combine NextClassState.InProgress(current.first, "$minsLeft min")
+        if (ongoingSessions.isNotEmpty()) {
+            val primary = ongoingSessions.first()
+            val totalMinsLeft = ChronoUnit.MINUTES.between(now, primary.third)
+            val hours = totalMinsLeft / 60
+            val mins = totalMinsLeft % 60
+            val timeText = if (hours > 0) {
+                if (mins > 0) "${hours} h ${mins} min" else "${hours} h"
+            } else {
+                "${mins} min"
+            }
+            return@combine NextClassState.InProgress(
+                sessions = ongoingSessions.map { it.first },
+                timeRemainingText = timeText
+            )
         }
 
         val next = validSessions.firstOrNull()
         if (next != null) {
-            val hoursUntil = ChronoUnit.HOURS.between(now, next.second)
+            val totalMinsUntil = ChronoUnit.MINUTES.between(now, next.second)
+            val hoursUntil = totalMinsUntil / 60
+            val minsUntil = totalMinsUntil % 60
             if (hoursUntil <= 48) {
-                val minsUntil = ChronoUnit.MINUTES.between(now, next.second)
-                val text = if (hoursUntil > 0) "${hoursUntil}h y ${minsUntil % 60}m" else "$minsUntil min"
+                val text = if (hoursUntil > 0) {
+                    if (minsUntil > 0) "${hoursUntil} h y ${minsUntil} min" else "${hoursUntil} h"
+                } else {
+                    "$minsUntil min"
+                }
                 return@combine NextClassState.Imminent(next.first, text)
             } else {
                 val outFormatter = DateTimeFormatter.ofPattern("EEEE d 'de' MMM", Locale.getDefault())
@@ -305,27 +320,31 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
         sessionList.forEach { session ->
-            if (session.modality.equals("Virtual", ignoreCase = true) && !session.virtualUrl.isNullOrBlank()) {
-                try {
-                    val start = LocalDateTime.parse("${session.sessionDate} ${session.startTime}", formatter)
-                    val minsDiff = ChronoUnit.MINUTES.between(start, now)
-                    if (minsDiff in -15..30) {
-                        generated.add(
-                            NotificationEntity(
-                                id = "LIVE_CLASS_${session.id}",
-                                userId = currentUserId,
-                                title = "Clase Virtual Iniciada: ${session.courseName}",
-                                description = "Tu clase de ${session.courseName} ya inició. Toca para unirte a la videollamada.",
-                                category = "Clases",
-                                isRead = false,
-                                virtualUrl = session.virtualUrl,
-                                timestamp = System.currentTimeMillis(),
-                                eventDate = session.sessionDate
-                            )
-                        )
+            try {
+                val start = LocalDateTime.parse("${session.sessionDate} ${session.startTime}", formatter)
+                val minsDiff = ChronoUnit.MINUTES.between(start, now)
+                val isVirtual = session.modality.equals("Virtual", ignoreCase = true)
+                if (minsDiff in -15..30) {
+                    val desc = if (isVirtual) {
+                        "Tu clase virtual de ${session.courseName} ya inició. Toca para unirte."
+                    } else {
+                        "Tu clase presencial de ${session.courseName} ya inició en ${session.locationRoom ?: "tu aula asignada"}."
                     }
-                } catch (e: Exception) { e.printStackTrace() }
-            }
+                    generated.add(
+                        NotificationEntity(
+                            id = "LIVE_CLASS_${session.id}",
+                            userId = currentUserId,
+                            title = if (isVirtual) "Clase Virtual Iniciada: ${session.courseName}" else "Clase en Curso: ${session.courseName}",
+                            description = desc,
+                            category = "Clases",
+                            isRead = false,
+                            virtualUrl = session.virtualUrl,
+                            timestamp = System.currentTimeMillis(),
+                            eventDate = session.sessionDate
+                        )
+                    )
+                }
+            } catch (e: Exception) { e.printStackTrace() }
         }
 
         taskList.filter { it.status != "Completado" }.forEach { task ->
@@ -419,30 +438,48 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun updateSessionDetails(sessionId: String, docente: String?, startTime: String, endTime: String, sessionDate: String, updateAllRecurring: Boolean = true) {
+    fun updateSessionDetails(sessionId: String, courseName: String? = null, docente: String?, startTime: String, endTime: String, sessionDate: String, updateAllRecurring: Boolean = true) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val originalSession = sessionDao.getSessionById(sessionId)
-                sessionDao.updateSessionDetails(sessionId, docente, startTime, endTime, sessionDate)
-                val updated = sessionDao.getSessionById(sessionId)
-                if (updated != null) {
-                    CloudSyncManager.syncSession(updated)
-                }
+                val originalSession = sessionDao.getSessionById(sessionId) ?: return@launch
+                val targetCourseName = courseName?.trim()?.ifBlank { null } ?: originalSession.courseName
+                val oldStart = originalSession.startTime
+                val oldEnd = originalSession.endTime
+                val oldCourseName = originalSession.courseName
+                val oldDate = originalSession.sessionDate
+                val targetUid = originalSession.userId
 
-                if (updateAllRecurring && originalSession != null) {
-                    val oldStart = originalSession.startTime
-                    val oldEnd = originalSession.endTime
-                    val courseName = originalSession.courseName
-                    val allUserSessions = sessionDao.getAllActiveSessionsSync(originalSession.userId)
+                if (updateAllRecurring) {
+                    val allUserSessions = sessionDao.getAllActiveSessionsSync(targetUid)
                     val sameScheduleSessions = allUserSessions.filter {
-                        it.courseName == courseName && it.startTime == oldStart && it.endTime == oldEnd && it.id != sessionId
+                        it.courseName == oldCourseName && it.startTime == oldStart && it.endTime == oldEnd
                     }
                     sameScheduleSessions.forEach { otherSession ->
-                        sessionDao.updateSessionDetails(otherSession.id, docente ?: otherSession.docente, startTime, endTime, otherSession.sessionDate)
+                        sessionDao.updateSessionDetails(
+                            sessionId = otherSession.id,
+                            newName = targetCourseName,
+                            docente = docente ?: otherSession.docente,
+                            startTime = startTime,
+                            endTime = endTime,
+                            sessionDate = otherSession.sessionDate
+                        )
                         val syncedOther = sessionDao.getSessionById(otherSession.id)
                         if (syncedOther != null) {
                             CloudSyncManager.syncSession(syncedOther)
                         }
+                    }
+                } else {
+                    sessionDao.updateSessionDetails(
+                        sessionId = sessionId,
+                        newName = targetCourseName,
+                        docente = docente ?: originalSession.docente,
+                        startTime = startTime,
+                        endTime = endTime,
+                        sessionDate = sessionDate
+                    )
+                    val updated = sessionDao.getSessionById(sessionId)
+                    if (updated != null) {
+                        CloudSyncManager.syncSession(updated)
                     }
                 }
             } catch (e: Exception) {
@@ -451,11 +488,40 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun updateTaskDateTime(taskId: String, dueDate: String, dueTime: String) {
+    fun deleteSession(sessionId: String, deleteAllRecurring: Boolean = true) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                evaluationDao.updateTaskDateTime(taskId, dueDate, dueTime)
-                val updated = tasks.value.find { it.id == taskId }
+                val session = sessionDao.getSessionById(sessionId) ?: return@launch
+                if (deleteAllRecurring) {
+                    val allUserSessions = sessionDao.getAllActiveSessionsSync(session.userId)
+                    val sameScheduleSessions = allUserSessions.filter {
+                        it.courseName == session.courseName && it.startTime == session.startTime && it.endTime == session.endTime
+                    }
+                    sameScheduleSessions.forEach { s ->
+                        sessionDao.softDeleteSession(s.id)
+                        CloudSyncManager.deleteFromCloud(s.userId, "class_sessions", s.id)
+                    }
+                } else {
+                    sessionDao.softDeleteSession(sessionId)
+                    CloudSyncManager.deleteFromCloud(session.userId, "class_sessions", sessionId)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun updateTaskDateTime(taskId: String, dueDate: String, dueTime: String) {
+        updateTaskDetails(taskId, null, dueDate, dueTime)
+    }
+
+    fun updateTaskDetails(taskId: String, title: String?, dueDate: String, dueTime: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val currentTask = tasks.value.find { it.id == taskId }
+                val targetTitle = title?.trim()?.ifBlank { null } ?: currentTask?.title ?: ""
+                evaluationDao.updateTaskDetails(taskId, targetTitle, dueDate, dueTime)
+                val updated = tasks.value.find { it.id == taskId }?.copy(title = targetTitle, dueDate = dueDate, dueTime = dueTime)
                 if (updated != null) {
                     CloudSyncManager.syncTask(updated)
                 }
@@ -465,13 +531,45 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun updateExamDateTime(examId: String, examDate: String, examTime: String) {
+    fun deleteTask(taskId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                evaluationDao.updateExamDateTime(examId, examDate, examTime)
-                val updated = exams.value.find { it.id == examId }
+                evaluationDao.softDeleteTask(taskId)
+                if (currentUserId.isNotBlank()) {
+                    CloudSyncManager.deleteFromCloud(currentUserId, "tasks", taskId)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun updateExamDateTime(examId: String, examDate: String, examTime: String) {
+        updateExamDetails(examId, null, examDate, examTime)
+    }
+
+    fun updateExamDetails(examId: String, type: String?, examDate: String, examTime: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val currentExam = exams.value.find { it.id == examId }
+                val targetType = type?.trim()?.ifBlank { null } ?: currentExam?.type ?: ""
+                evaluationDao.updateExamDetails(examId, targetType, examDate, examTime)
+                val updated = exams.value.find { it.id == examId }?.copy(type = targetType, examDate = examDate, examTime = examTime)
                 if (updated != null) {
                     CloudSyncManager.syncExam(updated)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun deleteExam(examId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                evaluationDao.softDeleteExam(examId)
+                if (currentUserId.isNotBlank()) {
+                    CloudSyncManager.deleteFromCloud(currentUserId, "exams", examId)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

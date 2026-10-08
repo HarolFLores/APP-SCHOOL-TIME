@@ -644,10 +644,14 @@ fun CalendarScreen(
     selectedSessionForEdit?.let { session ->
         ClassDetailEditDialog(
             session = session,
-            canEdit = true, // Permite editar el curso en Calendario
+            canEdit = true,
             onDismiss = { selectedSessionForEdit = null },
-            onSave = { docente, startTime, endTime, sessionDate ->
-                viewModel.updateSessionDetails(session.id, docente, startTime, endTime, sessionDate)
+            onDelete = {
+                viewModel.deleteSession(session.id, deleteAllRecurring = true)
+                selectedSessionForEdit = null
+            },
+            onSave = { newCourseName, docente, startTime, endTime, sessionDate ->
+                viewModel.updateSessionDetails(session.id, newCourseName, docente, startTime, endTime, sessionDate)
             }
         )
     }
@@ -655,10 +659,14 @@ fun CalendarScreen(
     selectedTaskForEdit?.let { task ->
         TaskDetailEditDialog(
             task = task,
-            canEdit = false, // Solo ver en calendario
+            canEdit = true,
             onDismiss = { selectedTaskForEdit = null },
-            onSave = { dueDate, dueTime ->
-                viewModel.updateTaskDateTime(task.id, dueDate, dueTime)
+            onDelete = {
+                viewModel.deleteTask(task.id)
+                selectedTaskForEdit = null
+            },
+            onSave = { newTitle, dueDate, dueTime ->
+                viewModel.updateTaskDetails(task.id, newTitle, dueDate, dueTime)
             }
         )
     }
@@ -666,10 +674,14 @@ fun CalendarScreen(
     selectedExamForEdit?.let { exam ->
         ExamDetailEditDialog(
             exam = exam,
-            canEdit = false, // Solo ver en calendario
+            canEdit = true,
             onDismiss = { selectedExamForEdit = null },
-            onSave = { examDate, examTime ->
-                viewModel.updateExamDateTime(exam.id, examDate, examTime)
+            onDelete = {
+                viewModel.deleteExam(exam.id)
+                selectedExamForEdit = null
+            },
+            onSave = { newType, examDate, examTime ->
+                viewModel.updateExamDetails(exam.id, newType, examDate, examTime)
             }
         )
     }

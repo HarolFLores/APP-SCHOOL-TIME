@@ -55,12 +55,15 @@ fun ClassDetailEditDialog(
     session: ClassSessionEntity,
     canEdit: Boolean = true,
     onDismiss: () -> Unit,
-    onSave: (docente: String?, startTime: String, endTime: String, sessionDate: String) -> Unit
+    onDelete: (() -> Unit)? = null,
+    onSave: (courseName: String, docente: String?, startTime: String, endTime: String, sessionDate: String) -> Unit
 ) {
     var isEditMode by remember { mutableStateOf(false) }
+    var courseName by remember { mutableStateOf(session.courseName) }
     var startTime by remember { mutableStateOf(session.startTime) }
     var endTime by remember { mutableStateOf(session.endTime) }
     var sessionDate by remember { mutableStateOf(session.sessionDate) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
@@ -186,14 +189,25 @@ fun ClassDetailEditDialog(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Course Name & Badges
-                Text(
-                    text = session.courseName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (isEditMode) {
+                    OutlinedTextField(
+                        value = courseName,
+                        onValueChange = { courseName = it },
+                        label = { Text("Nombre del Curso / Asignatura") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                } else {
+                    Text(
+                        text = session.courseName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -447,15 +461,36 @@ fun ClassDetailEditDialog(
 
                 // Botones de acción inferiores
                 if (!isEditMode) {
-                    Button(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("Cerrar", fontWeight = FontWeight.Bold)
+                        if (canEdit && onDelete != null) {
+                            OutlinedButton(
+                                onClick = { showDeleteConfirmDialog = true },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Eliminar", fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Button(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                        ) {
+                            Text("Cerrar", fontWeight = FontWeight.Bold)
+                        }
                     }
                 } else {
                     Row(
@@ -465,6 +500,7 @@ fun ClassDetailEditDialog(
                         OutlinedButton(
                             onClick = {
                                 isEditMode = false
+                                courseName = session.courseName
                                 startTime = session.startTime
                                 endTime = session.endTime
                                 sessionDate = session.sessionDate
@@ -479,7 +515,7 @@ fun ClassDetailEditDialog(
 
                         Button(
                             onClick = {
-                                onSave(session.docente, startTime, endTime, sessionDate)
+                                onSave(courseName, session.docente, startTime, endTime, sessionDate)
                                 onDismiss()
                             },
                             colors = ButtonDefaults.buttonColors(
@@ -499,6 +535,31 @@ fun ClassDetailEditDialog(
                 }
             }
         }
+    }
+
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Eliminar Asignatura") },
+            text = { Text("¿Deseas eliminar este curso y sus sesiones asociadas del horario?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        onDelete?.invoke()
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 
     if (showDatePicker) {
@@ -548,11 +609,14 @@ fun TaskDetailEditDialog(
     task: TaskEntity,
     canEdit: Boolean = true,
     onDismiss: () -> Unit,
-    onSave: (dueDate: String, dueTime: String) -> Unit
+    onDelete: (() -> Unit)? = null,
+    onSave: (title: String, dueDate: String, dueTime: String) -> Unit
 ) {
     var isEditMode by remember { mutableStateOf(false) }
+    var title by remember { mutableStateOf(task.title) }
     var dueDate by remember { mutableStateOf(task.dueDate) }
     var dueTime by remember { mutableStateOf(task.dueTime.ifBlank { "23:59" }) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
@@ -671,12 +735,23 @@ fun TaskDetailEditDialog(
                     fontWeight = FontWeight.Bold,
                     color = taskAccentColor
                 )
-                Text(
-                    text = task.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                if (isEditMode) {
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text("Título de la Tarea") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                } else {
+                    Text(
+                        text = task.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -835,15 +910,36 @@ fun TaskDetailEditDialog(
 
                 // Botones inferiores
                 if (!isEditMode) {
-                    Button(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("Cerrar", fontWeight = FontWeight.Bold)
+                        if (canEdit && onDelete != null) {
+                            OutlinedButton(
+                                onClick = { showDeleteConfirmDialog = true },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Eliminar", fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Button(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                        ) {
+                            Text("Cerrar", fontWeight = FontWeight.Bold)
+                        }
                     }
                 } else {
                     Row(
@@ -853,6 +949,7 @@ fun TaskDetailEditDialog(
                         OutlinedButton(
                             onClick = {
                                 isEditMode = false
+                                title = task.title
                                 dueDate = task.dueDate
                                 dueTime = task.dueTime.ifBlank { "23:59" }
                             },
@@ -866,7 +963,7 @@ fun TaskDetailEditDialog(
 
                         Button(
                             onClick = {
-                                onSave(dueDate, dueTime)
+                                onSave(title, dueDate, dueTime)
                                 onDismiss()
                             },
                             colors = ButtonDefaults.buttonColors(
@@ -886,6 +983,31 @@ fun TaskDetailEditDialog(
                 }
             }
         }
+    }
+
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Eliminar Tarea") },
+            text = { Text("¿Estás seguro de que deseas eliminar esta tarea?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        onDelete?.invoke()
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 
     if (showDatePicker) {
@@ -925,11 +1047,14 @@ fun ExamDetailEditDialog(
     exam: ExamEntity,
     canEdit: Boolean = true,
     onDismiss: () -> Unit,
-    onSave: (examDate: String, examTime: String) -> Unit
+    onDelete: (() -> Unit)? = null,
+    onSave: (type: String, examDate: String, examTime: String) -> Unit
 ) {
     var isEditMode by remember { mutableStateOf(false) }
+    var type by remember { mutableStateOf(exam.type) }
     var examDate by remember { mutableStateOf(exam.examDate) }
     var examTime by remember { mutableStateOf(exam.examTime.ifBlank { "08:00 - 10:00" }) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState()
@@ -1048,12 +1173,23 @@ fun ExamDetailEditDialog(
                     fontWeight = FontWeight.Bold,
                     color = examAccentColor
                 )
-                Text(
-                    text = exam.type,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                if (isEditMode) {
+                    OutlinedTextField(
+                        value = type,
+                        onValueChange = { type = it },
+                        label = { Text("Tipo de Examen (ej: Parcial, Final, Práctica)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                } else {
+                    Text(
+                        text = exam.type,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -1212,15 +1348,36 @@ fun ExamDetailEditDialog(
 
                 // Botones inferiores
                 if (!isEditMode) {
-                    Button(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("Cerrar", fontWeight = FontWeight.Bold)
+                        if (canEdit && onDelete != null) {
+                            OutlinedButton(
+                                onClick = { showDeleteConfirmDialog = true },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Eliminar", fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Button(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                        ) {
+                            Text("Cerrar", fontWeight = FontWeight.Bold)
+                        }
                     }
                 } else {
                     Row(
@@ -1230,6 +1387,7 @@ fun ExamDetailEditDialog(
                         OutlinedButton(
                             onClick = {
                                 isEditMode = false
+                                type = exam.type
                                 examDate = exam.examDate
                                 examTime = exam.examTime.ifBlank { "08:00 - 10:00" }
                             },
@@ -1243,7 +1401,7 @@ fun ExamDetailEditDialog(
 
                         Button(
                             onClick = {
-                                onSave(examDate, examTime)
+                                onSave(type, examDate, examTime)
                                 onDismiss()
                             },
                             colors = ButtonDefaults.buttonColors(
@@ -1263,6 +1421,31 @@ fun ExamDetailEditDialog(
                 }
             }
         }
+    }
+
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Eliminar Examen") },
+            text = { Text("¿Estás seguro de que deseas eliminar este examen?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        onDelete?.invoke()
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 
     if (showDatePicker) {

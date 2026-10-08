@@ -75,12 +75,13 @@ class AlarmReceiver : BroadcastReceiver() {
                     .setSummaryText(category)
                     .bigText(message)
             )
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setOngoing(true) // Mantiene la notificación fija y activa en la barra de estado
+            .setAutoCancel(false)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setSound(soundUri)
             .setVibrate(longArrayOf(0, 150, 100, 200, 100, 300))
             .setLights(0xFF00E676.toInt(), 500, 1000)
-            .setAutoCancel(true)
             .setContentIntent(appPendingIntent)
 
         // For classes, never show a video call button because links were removed.

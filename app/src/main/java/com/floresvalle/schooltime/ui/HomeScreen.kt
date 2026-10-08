@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -525,14 +527,18 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Dialogs (Modo solo lectura en Inicio)
+        // Dialogs (Modo completo de edición y eliminación)
         selectedSessionForEdit?.let { session ->
             ClassDetailEditDialog(
                 session = session,
-                canEdit = false,
+                canEdit = true,
                 onDismiss = { selectedSessionForEdit = null },
-                onSave = { docente, startTime, endTime, sessionDate ->
-                    viewModel.updateSessionDetails(session.id, docente, startTime, endTime, sessionDate)
+                onDelete = {
+                    viewModel.deleteSession(session.id, deleteAllRecurring = true)
+                    selectedSessionForEdit = null
+                },
+                onSave = { newCourseName, docente, startTime, endTime, sessionDate ->
+                    viewModel.updateSessionDetails(session.id, newCourseName, docente, startTime, endTime, sessionDate)
                 }
             )
         }
@@ -540,10 +546,14 @@ fun HomeScreen(
         selectedTaskForEdit?.let { task ->
             TaskDetailEditDialog(
                 task = task,
-                canEdit = false,
+                canEdit = true,
                 onDismiss = { selectedTaskForEdit = null },
-                onSave = { dueDate, dueTime ->
-                    viewModel.updateTaskDateTime(task.id, dueDate, dueTime)
+                onDelete = {
+                    viewModel.deleteTask(task.id)
+                    selectedTaskForEdit = null
+                },
+                onSave = { newTitle, dueDate, dueTime ->
+                    viewModel.updateTaskDetails(task.id, newTitle, dueDate, dueTime)
                 }
             )
         }
@@ -551,10 +561,14 @@ fun HomeScreen(
         selectedExamForEdit?.let { exam ->
             ExamDetailEditDialog(
                 exam = exam,
-                canEdit = false,
+                canEdit = true,
                 onDismiss = { selectedExamForEdit = null },
-                onSave = { examDate, examTime ->
-                    viewModel.updateExamDateTime(exam.id, examDate, examTime)
+                onDelete = {
+                    viewModel.deleteExam(exam.id)
+                    selectedExamForEdit = null
+                },
+                onSave = { newType, examDate, examTime ->
+                    viewModel.updateExamDetails(exam.id, newType, examDate, examTime)
                 }
             )
         }
@@ -600,14 +614,62 @@ fun NextClassCard(
             )
         }
         is SessionViewModel.NextClassState.InProgress -> {
-            RenderSessionCard(
-                state.session,
-                state.timeRemainingText,
-                "EN VIVO",
-                MaterialTheme.colorScheme.errorContainer,
-                MaterialTheme.colorScheme.onErrorContainer,
-                onClick = { onClick(state.session) }
-            )
+            val sessionsList = state.sessions
+            if (sessionsList.size > 1) {
+                val pagerState = rememberPagerState(pageCount = { sessionsList.size })
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { page ->
+                        RenderSessionCard(
+                            session = sessionsList[page],
+                            timeText = state.timeRemainingText,
+                            badgeText = "EN VIVO",
+                            badgeBg = MaterialTheme.colorScheme.errorContainer,
+                            badgeColor = MaterialTheme.colorScheme.onErrorContainer,
+                            onClick = { onClick(sessionsList[page]) }
+                        )
+                    }
+
+                    // Pager Indicators
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        repeat(sessionsList.size) { index ->
+                            val isSelected = pagerState.currentPage == index
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 4.dp)
+                                    .size(if (isSelected) 8.dp else 6.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                                    )
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "${pagerState.currentPage + 1} de ${sessionsList.size} en vivo",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else if (sessionsList.isNotEmpty()) {
+                RenderSessionCard(
+                    session = sessionsList.first(),
+                    timeText = state.timeRemainingText,
+                    badgeText = "EN VIVO",
+                    badgeBg = MaterialTheme.colorScheme.errorContainer,
+                    badgeColor = MaterialTheme.colorScheme.onErrorContainer,
+                    onClick = { onClick(sessionsList.first()) }
+                )
+            }
         }
     }
 }

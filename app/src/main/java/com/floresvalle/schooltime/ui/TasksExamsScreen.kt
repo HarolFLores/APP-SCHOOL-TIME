@@ -404,8 +404,13 @@ fun TasksExamsScreen(
             task = task,
             canEdit = true,
             onDismiss = { taskForEdit = null },
-            onSave = { dueDate, dueTime ->
-                viewModel.updateTaskDateTime(task.id, dueDate, dueTime)
+            onDelete = {
+                viewModel.deleteTask(task.id)
+                taskForEdit = null
+            },
+            onSave = { newTitle, dueDate, dueTime ->
+                viewModel.updateTaskDetails(task.id, newTitle, dueDate, dueTime)
+                taskForEdit = null
             }
         )
     }
@@ -415,8 +420,13 @@ fun TasksExamsScreen(
             exam = exam,
             canEdit = true,
             onDismiss = { examForEdit = null },
-            onSave = { examDate, examTime ->
-                viewModel.updateExamDateTime(exam.id, examDate, examTime)
+            onDelete = {
+                viewModel.deleteExam(exam.id)
+                examForEdit = null
+            },
+            onSave = { newType, examDate, examTime ->
+                viewModel.updateExamDetails(exam.id, newType, examDate, examTime)
+                examForEdit = null
             }
         )
     }

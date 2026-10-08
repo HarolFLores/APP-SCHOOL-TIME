@@ -178,6 +178,21 @@ object CloudSyncManager {
         }
     }
 
+    suspend fun deleteFromCloud(userId: String, collectionName: String, itemId: String) {
+        if (userId.isBlank() || itemId.isBlank()) return
+        try {
+            firestore.collection("users")
+                .document(userId)
+                .collection(collectionName)
+                .document(itemId)
+                .set(mapOf("is_deleted" to true, "updated_at" to System.currentTimeMillis()), SetOptions.merge())
+                .await()
+            Log.d(TAG, "Item marcado como eliminado en Firestore: $collectionName/$itemId")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error deleteFromCloud en Firestore: ${e.message}")
+        }
+    }
+
     suspend fun restoreAllFromCloud(userId: String, db: AppDatabase) {
         if (userId.isBlank()) return
         Log.d(TAG, "Iniciando restauración de datos en la nube para el usuario: $userId")
