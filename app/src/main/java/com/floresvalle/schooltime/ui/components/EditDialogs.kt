@@ -12,6 +12,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
+import androidx.compose.material.icons.automirrored.filled.EventNote
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -121,8 +123,8 @@ fun ClassDetailEditDialog(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.primaryContainer)
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)),
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f), RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -136,13 +138,14 @@ fun ClassDetailEditDialog(
                             Text(
                                 "ASIGNATURA",
                                 style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.primary,
                                 letterSpacing = 1.sp
                             )
                             Text(
-                                "Detalles del Horario",
+                                if (canEdit) "Detalles y Modificación" else "Solo Visualización",
                                 style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -178,7 +181,7 @@ fun ClassDetailEditDialog(
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primary,
                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
                                 labelColor = MaterialTheme.colorScheme.primary
                             ),
                             border = BorderStroke(1.dp, if (isEditMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)
@@ -195,13 +198,21 @@ fun ClassDetailEditDialog(
                         onValueChange = { courseName = it },
                         label = { Text("Nombre del Curso / Asignatura") },
                         singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                        ),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
                 } else {
                     Text(
                         text = session.courseName,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2,
@@ -209,7 +220,7 @@ fun ClassDetailEditDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Badges Row
                 Row(
@@ -217,23 +228,24 @@ fun ClassDetailEditDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val isVirtual = session.modality.equals("Virtual", ignoreCase = true)
-                    val modBg = if (isVirtual) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
-                    val modOnBg = if (isVirtual) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                    val modBg = if (isVirtual) Color(0xFFE0F2FE) else Color(0xFFDCFCE7)
+                    val modOnBg = if (isVirtual) Color(0xFF0369A1) else Color(0xFF15803D)
 
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = modBg
+                        color = modBg,
+                        border = BorderStroke(1.dp, modOnBg.copy(alpha = 0.25f))
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Icon(
                                 if (isVirtual) Icons.Default.Videocam else Icons.Default.LocationOn,
                                 contentDescription = null,
                                 tint = modOnBg,
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(14.dp)
                             )
                             Text(
                                 session.modality,
@@ -246,19 +258,20 @@ fun ClassDetailEditDialog(
 
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+                            Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
                             Text(
                                 "Activo",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -294,14 +307,24 @@ fun ClassDetailEditDialog(
                 // Datos informativos (Docente y Aula)
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            }
                             Column {
-                                Text("Docente", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Docente", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(
                                     session.docente?.ifBlank { "Docente no especificado" } ?: "Docente no especificado",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -311,12 +334,21 @@ fun ClassDetailEditDialog(
                             }
                         }
 
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Icon(Icons.Default.Place, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Place, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            }
                             Column {
-                                Text("Ubicación / Aula", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Ubicación / Aula", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(
                                     session.locationRoom ?: session.virtualUrl ?: "Aula universitaria asignada",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -328,34 +360,42 @@ fun ClassDetailEditDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // SECCIÓN HORARIO
                 Text(
                     text = "PROGRAMACIÓN DE HORARIO",
                     style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     letterSpacing = 1.sp
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Fecha
                 if (!isEditMode) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Icon(Icons.Default.CalendarToday, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.CalendarToday, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            }
                             Column {
-                                Text("Fecha de Cátedra", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Fecha de Cátedra", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(formatReadableDate(sessionDate), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                             }
                         }
@@ -370,48 +410,64 @@ fun ClassDetailEditDialog(
                             .clickable { showDatePicker = true }
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                }
                                 Column {
                                     Text("Fecha (Toca para cambiar)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                     Text(formatReadableDate(sessionDate), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                                 }
                             }
-                            Icon(Icons.Default.EditCalendar, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.EditCalendar, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Horas (Inicio / Fin)
                 if (!isEditMode) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            }
                             Column {
-                                Text("Horario de Clase", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("$startTime - $endTime", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                Text("Horario de Clase", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("$startTime - $endTime", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                             }
                         }
                     }
                 } else {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Surface(
                             shape = RoundedCornerShape(12.dp),
@@ -422,11 +478,11 @@ fun ClassDetailEditDialog(
                                 .clickable { showStartTimePicker = true }
                         ) {
                             Row(
-                                modifier = Modifier.padding(10.dp),
+                                modifier = Modifier.padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                 Column {
                                     Text("Inicio", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                     Text(startTime, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
@@ -443,11 +499,11 @@ fun ClassDetailEditDialog(
                                 .clickable { showEndTimePicker = true }
                         ) {
                             Row(
-                                modifier = Modifier.padding(10.dp),
+                                modifier = Modifier.padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                 Column {
                                     Text("Fin", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                     Text(endTime, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
@@ -457,7 +513,7 @@ fun ClassDetailEditDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 // Botones de acción inferiores
                 if (!isEditMode) {
@@ -470,10 +526,13 @@ fun ClassDetailEditDialog(
                                 onClick = { showDeleteConfirmDialog = true },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(44.dp),
+                                    .height(46.dp),
                                 shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error,
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                ),
+                                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
                             ) {
                                 Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -485,9 +544,13 @@ fun ClassDetailEditDialog(
                             onClick = onDismiss,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(44.dp),
+                                .height(46.dp),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (!canEdit) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (!canEdit) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                            ),
+                            border = if (canEdit) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
                         ) {
                             Text("Cerrar", fontWeight = FontWeight.Bold)
                         }
@@ -507,10 +570,11 @@ fun ClassDetailEditDialog(
                             },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(44.dp),
-                            shape = RoundedCornerShape(12.dp)
+                                .height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                         ) {
-                            Text("Cancelar")
+                            Text("Cancelar", fontWeight = FontWeight.Medium)
                         }
 
                         Button(
@@ -524,7 +588,7 @@ fun ClassDetailEditDialog(
                             ),
                             modifier = Modifier
                                 .weight(1.3f)
-                                .height(44.dp),
+                                .height(46.dp),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -663,14 +727,14 @@ fun TaskDetailEditDialog(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(taskBadgeContainer)
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)),
+                                .background(Color(0xFFFEE2E2))
+                                .border(1.dp, Color(0xFFFCA5A5), RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Assignment,
                                 contentDescription = null,
-                                tint = taskAccentColor,
+                                tint = Color(0xFFDC2626),
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -678,13 +742,14 @@ fun TaskDetailEditDialog(
                             Text(
                                 "TRABAJO ACADÉMICO",
                                 style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = taskAccentColor,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFDC2626),
                                 letterSpacing = 1.sp
                             )
                             Text(
-                                "Detalles de Entrega",
+                                if (canEdit) "Detalles y Modificación" else "Solo Visualización",
                                 style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -712,17 +777,17 @@ fun TaskDetailEditDialog(
                                     Icons.Default.Edit,
                                     contentDescription = "Activar edición",
                                     modifier = Modifier.size(15.dp),
-                                    tint = if (isEditMode) MaterialTheme.colorScheme.onError else taskAccentColor
+                                    tint = if (isEditMode) Color.White else Color(0xFFDC2626)
                                 )
                             },
                             shape = RoundedCornerShape(50),
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = taskAccentColor,
-                                selectedLabelColor = MaterialTheme.colorScheme.onError,
-                                containerColor = taskBadgeContainer.copy(alpha = 0.5f),
-                                labelColor = taskAccentColor
+                                selectedContainerColor = Color(0xFFDC2626),
+                                selectedLabelColor = Color.White,
+                                containerColor = Color(0xFFFEE2E2),
+                                labelColor = Color(0xFFDC2626)
                             ),
-                            border = BorderStroke(1.dp, if (isEditMode) taskAccentColor else MaterialTheme.colorScheme.outlineVariant)
+                            border = BorderStroke(1.dp, if (isEditMode) Color(0xFFDC2626) else MaterialTheme.colorScheme.outlineVariant)
                         )
                     }
                 }
@@ -732,8 +797,8 @@ fun TaskDetailEditDialog(
                 Text(
                     text = task.courseName,
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = taskAccentColor
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFFDC2626)
                 )
                 if (isEditMode) {
                     OutlinedTextField(
@@ -741,38 +806,54 @@ fun TaskDetailEditDialog(
                         onValueChange = { title = it },
                         label = { Text("Título de la Tarea") },
                         singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFDC2626),
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                        ),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
                 } else {
                     Text(
                         text = task.title,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Badges
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Surface(shape = RoundedCornerShape(8.dp), color = taskBadgeContainer) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFFEE2E2),
+                        border = BorderStroke(1.dp, Color(0xFFFCA5A5))
+                    ) {
                         Text(
                             text = "Prioridad: ${task.urgency}",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = taskBadgeOnContainer,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            color = Color(0xFF991B1B),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                         )
                     }
-                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
                         Text(
                             text = "Modalidad: ${task.modality}",
                             style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                         )
                     }
                 }
@@ -782,8 +863,8 @@ fun TaskDetailEditDialog(
                 if (isEditMode) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = taskBadgeContainer.copy(alpha = 0.5f),
-                        border = BorderStroke(1.dp, taskAccentColor.copy(alpha = 0.4f)),
+                        color = Color(0xFFFEE2E2),
+                        border = BorderStroke(1.dp, Color(0xFFF87171)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -791,7 +872,7 @@ fun TaskDetailEditDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Default.Info, contentDescription = null, tint = taskAccentColor, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Info, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
                             Text(
                                 "Modifica la fecha límite de entrega.",
                                 style = MaterialTheme.typography.bodySmall,
@@ -807,27 +888,35 @@ fun TaskDetailEditDialog(
                 Text(
                     "FECHA LÍMITE DE ENTREGA",
                     style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     letterSpacing = 1.sp
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 if (!isEditMode) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Icon(Icons.Default.CalendarToday, contentDescription = null, tint = taskAccentColor, modifier = Modifier.size(18.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFFEE2E2)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.CalendarToday, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
+                            }
                             Column {
-                                Text("Fecha de Entrega", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Fecha de Entrega", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(formatReadableDate(dueDate), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                             }
                         }
@@ -836,46 +925,62 @@ fun TaskDetailEditDialog(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.5.dp, taskAccentColor),
+                        border = BorderStroke(1.5.dp, Color(0xFFDC2626)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { showDatePicker = true }
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = taskAccentColor, modifier = Modifier.size(20.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFFFEE2E2)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(20.dp))
+                                }
                                 Column {
-                                    Text("Fecha de Entrega (Toca para cambiar)", style = MaterialTheme.typography.labelSmall, color = taskAccentColor, fontWeight = FontWeight.Bold)
+                                    Text("Fecha de Entrega (Toca para cambiar)", style = MaterialTheme.typography.labelSmall, color = Color(0xFFDC2626), fontWeight = FontWeight.Bold)
                                     Text(formatReadableDate(dueDate), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                                 }
                             }
-                            Icon(Icons.Default.EditCalendar, contentDescription = null, tint = taskAccentColor, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.EditCalendar, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(20.dp))
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // HORA LÍMITE
                 if (!isEditMode) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Icon(Icons.Default.Schedule, contentDescription = null, tint = taskAccentColor, modifier = Modifier.size(18.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFFEE2E2)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Schedule, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
+                            }
                             Column {
-                                Text("Hora Límite", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Hora Límite", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(dueTime, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                             }
                         }
@@ -884,29 +989,37 @@ fun TaskDetailEditDialog(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.5.dp, taskAccentColor),
+                        border = BorderStroke(1.5.dp, Color(0xFFDC2626)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { showTimePicker = true }
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Icon(Icons.Default.Schedule, contentDescription = null, tint = taskAccentColor, modifier = Modifier.size(18.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFFFEE2E2)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Schedule, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
+                                }
                                 Column {
-                                    Text("Hora Límite (Toca para cambiar)", style = MaterialTheme.typography.labelSmall, color = taskAccentColor, fontWeight = FontWeight.Bold)
+                                    Text("Hora Límite (Toca para cambiar)", style = MaterialTheme.typography.labelSmall, color = Color(0xFFDC2626), fontWeight = FontWeight.Bold)
                                     Text(dueTime, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                                 }
                             }
-                            Icon(Icons.Default.Edit, contentDescription = null, tint = taskAccentColor, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(20.dp))
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 // Botones inferiores
                 if (!isEditMode) {
@@ -919,10 +1032,13 @@ fun TaskDetailEditDialog(
                                 onClick = { showDeleteConfirmDialog = true },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(44.dp),
+                                    .height(46.dp),
                                 shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error,
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                ),
+                                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
                             ) {
                                 Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -934,9 +1050,13 @@ fun TaskDetailEditDialog(
                             onClick = onDismiss,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(44.dp),
+                                .height(46.dp),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (!canEdit) Color(0xFFDC2626) else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (!canEdit) Color.White else MaterialTheme.colorScheme.onSurface
+                            ),
+                            border = if (canEdit) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
                         ) {
                             Text("Cerrar", fontWeight = FontWeight.Bold)
                         }
@@ -955,10 +1075,11 @@ fun TaskDetailEditDialog(
                             },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(44.dp),
-                            shape = RoundedCornerShape(12.dp)
+                                .height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                         ) {
-                            Text("Cancelar")
+                            Text("Cancelar", fontWeight = FontWeight.Medium)
                         }
 
                         Button(
@@ -967,12 +1088,12 @@ fun TaskDetailEditDialog(
                                 onDismiss()
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = taskAccentColor,
-                                contentColor = MaterialTheme.colorScheme.onError
+                                containerColor = Color(0xFFDC2626),
+                                contentColor = Color.White
                             ),
                             modifier = Modifier
                                 .weight(1.3f)
-                                .height(44.dp),
+                                .height(46.dp),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -1101,14 +1222,14 @@ fun ExamDetailEditDialog(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(examBadgeContainer)
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)),
+                                .background(Color(0xFFFEF3C7))
+                                .border(1.dp, Color(0xFFFCD34D), RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                Icons.Default.EventNote,
+                                Icons.AutoMirrored.Filled.EventNote,
                                 contentDescription = null,
-                                tint = examAccentColor,
+                                tint = Color(0xFFD97706),
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -1116,13 +1237,14 @@ fun ExamDetailEditDialog(
                             Text(
                                 "EVALUACIÓN ACADÉMICA",
                                 style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = examAccentColor,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFD97706),
                                 letterSpacing = 1.sp
                             )
                             Text(
-                                "Detalles del Examen",
+                                if (canEdit) "Detalles y Modificación" else "Solo Visualización",
                                 style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -1150,17 +1272,17 @@ fun ExamDetailEditDialog(
                                     Icons.Default.Edit,
                                     contentDescription = "Activar edición",
                                     modifier = Modifier.size(15.dp),
-                                    tint = if (isEditMode) MaterialTheme.colorScheme.onTertiary else examAccentColor
+                                    tint = if (isEditMode) Color.White else Color(0xFFD97706)
                                 )
                             },
                             shape = RoundedCornerShape(50),
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = examAccentColor,
-                                selectedLabelColor = MaterialTheme.colorScheme.onTertiary,
-                                containerColor = examBadgeContainer.copy(alpha = 0.5f),
-                                labelColor = examAccentColor
+                                selectedContainerColor = Color(0xFFD97706),
+                                selectedLabelColor = Color.White,
+                                containerColor = Color(0xFFFEF3C7),
+                                labelColor = Color(0xFFD97706)
                             ),
-                            border = BorderStroke(1.dp, if (isEditMode) examAccentColor else MaterialTheme.colorScheme.outlineVariant)
+                            border = BorderStroke(1.dp, if (isEditMode) Color(0xFFD97706) else MaterialTheme.colorScheme.outlineVariant)
                         )
                     }
                 }
@@ -1170,8 +1292,8 @@ fun ExamDetailEditDialog(
                 Text(
                     text = exam.courseName,
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = examAccentColor
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFFD97706)
                 )
                 if (isEditMode) {
                     OutlinedTextField(
@@ -1179,38 +1301,54 @@ fun ExamDetailEditDialog(
                         onValueChange = { type = it },
                         label = { Text("Tipo de Examen (ej: Parcial, Final, Práctica)") },
                         singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFD97706),
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                        ),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
                 } else {
                     Text(
                         text = exam.type,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // Badges
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Surface(shape = RoundedCornerShape(8.dp), color = examBadgeContainer) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFFEF3C7),
+                        border = BorderStroke(1.dp, Color(0xFFFCD34D))
+                    ) {
                         Text(
                             text = "Ponderación: ${exam.weight ?: "20%"}",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = examBadgeOnContainer,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            color = Color(0xFF92400E),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                         )
                     }
-                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
                         Text(
                             text = exam.modality,
                             style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                         )
                     }
                 }
@@ -1220,8 +1358,8 @@ fun ExamDetailEditDialog(
                 if (isEditMode) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = examBadgeContainer.copy(alpha = 0.5f),
-                        border = BorderStroke(1.dp, examAccentColor.copy(alpha = 0.4f)),
+                        color = Color(0xFFFEF3C7),
+                        border = BorderStroke(1.dp, Color(0xFFF59E0B)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -1229,7 +1367,7 @@ fun ExamDetailEditDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Default.Info, contentDescription = null, tint = examAccentColor, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Info, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(16.dp))
                             Text(
                                 "Modifica la fecha programada del examen.",
                                 style = MaterialTheme.typography.bodySmall,
@@ -1245,27 +1383,35 @@ fun ExamDetailEditDialog(
                 Text(
                     "FECHA PROGRAMADA DEL EXAMEN",
                     style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     letterSpacing = 1.sp
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 if (!isEditMode) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Icon(Icons.Default.CalendarToday, contentDescription = null, tint = examAccentColor, modifier = Modifier.size(18.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFFEF3C7)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.CalendarToday, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(18.dp))
+                            }
                             Column {
-                                Text("Fecha de Evaluación", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Fecha de Evaluación", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(formatReadableDate(examDate), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                             }
                         }
@@ -1274,46 +1420,62 @@ fun ExamDetailEditDialog(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.5.dp, examAccentColor),
+                        border = BorderStroke(1.5.dp, Color(0xFFD97706)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { showDatePicker = true }
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = examAccentColor, modifier = Modifier.size(20.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFFFEF3C7)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(20.dp))
+                                }
                                 Column {
-                                    Text("Fecha de Examen (Toca para cambiar)", style = MaterialTheme.typography.labelSmall, color = examAccentColor, fontWeight = FontWeight.Bold)
+                                    Text("Fecha de Examen (Toca para cambiar)", style = MaterialTheme.typography.labelSmall, color = Color(0xFFD97706), fontWeight = FontWeight.Bold)
                                     Text(formatReadableDate(examDate), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                                 }
                             }
-                            Icon(Icons.Default.EditCalendar, contentDescription = null, tint = examAccentColor, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.EditCalendar, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(20.dp))
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // RANGO DE HORAS
                 if (!isEditMode) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Icon(Icons.Default.Schedule, contentDescription = null, tint = examAccentColor, modifier = Modifier.size(18.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFFEF3C7)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Schedule, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(18.dp))
+                            }
                             Column {
-                                Text("Horario de Examen", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Horario de Examen", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(examTime, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                             }
                         }
@@ -1322,29 +1484,37 @@ fun ExamDetailEditDialog(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.5.dp, examAccentColor),
+                        border = BorderStroke(1.5.dp, Color(0xFFD97706)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { showTimePicker = true }
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Icon(Icons.Default.Schedule, contentDescription = null, tint = examAccentColor, modifier = Modifier.size(18.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFFFEF3C7)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Schedule, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(18.dp))
+                                }
                                 Column {
-                                    Text("Rango de Horas (Toca para ajustar)", style = MaterialTheme.typography.labelSmall, color = examAccentColor, fontWeight = FontWeight.Bold)
+                                    Text("Rango de Horas (Toca para ajustar)", style = MaterialTheme.typography.labelSmall, color = Color(0xFFD97706), fontWeight = FontWeight.Bold)
                                     Text(examTime, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                                 }
                             }
-                            Icon(Icons.Default.Edit, contentDescription = null, tint = examAccentColor, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(20.dp))
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 // Botones inferiores
                 if (!isEditMode) {
@@ -1357,10 +1527,13 @@ fun ExamDetailEditDialog(
                                 onClick = { showDeleteConfirmDialog = true },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(44.dp),
+                                    .height(46.dp),
                                 shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error,
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                ),
+                                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
                             ) {
                                 Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -1372,9 +1545,13 @@ fun ExamDetailEditDialog(
                             onClick = onDismiss,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(44.dp),
+                                .height(46.dp),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (!canEdit) Color(0xFFD97706) else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (!canEdit) Color.White else MaterialTheme.colorScheme.onSurface
+                            ),
+                            border = if (canEdit) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
                         ) {
                             Text("Cerrar", fontWeight = FontWeight.Bold)
                         }
@@ -1393,10 +1570,11 @@ fun ExamDetailEditDialog(
                             },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(44.dp),
-                            shape = RoundedCornerShape(12.dp)
+                                .height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                         ) {
-                            Text("Cancelar")
+                            Text("Cancelar", fontWeight = FontWeight.Medium)
                         }
 
                         Button(
@@ -1405,12 +1583,12 @@ fun ExamDetailEditDialog(
                                 onDismiss()
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = examAccentColor,
-                                contentColor = MaterialTheme.colorScheme.onTertiary
+                                containerColor = Color(0xFFD97706),
+                                contentColor = Color.White
                             ),
                             modifier = Modifier
                                 .weight(1.3f)
-                                .height(44.dp),
+                                .height(46.dp),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))

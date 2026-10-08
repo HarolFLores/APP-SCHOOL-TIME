@@ -36,6 +36,15 @@ interface ClassSessionDao {
     @Query("UPDATE sessions SET courseName = :newName, docente = :docente, startTime = :startTime, endTime = :endTime, sessionDate = :sessionDate, updatedAt = :timestamp WHERE id = :sessionId")
     suspend fun updateSessionDetails(sessionId: String, newName: String, docente: String?, startTime: String, endTime: String, sessionDate: String, timestamp: Long = System.currentTimeMillis()): Int
 
+    @Query("UPDATE sessions SET isDeleted = 1, syncState = 'PENDING_UPLOAD', updatedAt = :timestamp WHERE userId = :userId AND courseName = :courseName")
+    suspend fun softDeleteAllSessionsForCourse(userId: String, courseName: String, timestamp: Long = System.currentTimeMillis()): Int
+
+    @Query("DELETE FROM sessions WHERE id = :sessionId")
+    suspend fun hardDeleteSession(sessionId: String): Int
+
+    @Query("DELETE FROM sessions WHERE userId = :userId AND courseName = :courseName")
+    suspend fun hardDeleteAllSessionsForCourse(userId: String, courseName: String): Int
+
     @Query("SELECT * FROM sessions WHERE syncState = 'PENDING_UPLOAD'")
     suspend fun getPendingUploadSessions(): List<ClassSessionEntity>
 

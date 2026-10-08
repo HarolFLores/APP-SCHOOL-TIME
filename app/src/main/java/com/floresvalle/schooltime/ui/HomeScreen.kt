@@ -527,49 +527,34 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Dialogs (Modo completo de edición y eliminación)
+        // Dialogs (Modo solo visualización en Inicio)
         selectedSessionForEdit?.let { session ->
             ClassDetailEditDialog(
                 session = session,
-                canEdit = true,
+                canEdit = false,
                 onDismiss = { selectedSessionForEdit = null },
-                onDelete = {
-                    viewModel.deleteSession(session.id, deleteAllRecurring = true)
-                    selectedSessionForEdit = null
-                },
-                onSave = { newCourseName, docente, startTime, endTime, sessionDate ->
-                    viewModel.updateSessionDetails(session.id, newCourseName, docente, startTime, endTime, sessionDate)
-                }
+                onDelete = null,
+                onSave = { _, _, _, _, _ -> }
             )
         }
 
         selectedTaskForEdit?.let { task ->
             TaskDetailEditDialog(
                 task = task,
-                canEdit = true,
+                canEdit = false,
                 onDismiss = { selectedTaskForEdit = null },
-                onDelete = {
-                    viewModel.deleteTask(task.id)
-                    selectedTaskForEdit = null
-                },
-                onSave = { newTitle, dueDate, dueTime ->
-                    viewModel.updateTaskDetails(task.id, newTitle, dueDate, dueTime)
-                }
+                onDelete = null,
+                onSave = { _, _, _ -> }
             )
         }
 
         selectedExamForEdit?.let { exam ->
             ExamDetailEditDialog(
                 exam = exam,
-                canEdit = true,
+                canEdit = false,
                 onDismiss = { selectedExamForEdit = null },
-                onDelete = {
-                    viewModel.deleteExam(exam.id)
-                    selectedExamForEdit = null
-                },
-                onSave = { newType, examDate, examTime ->
-                    viewModel.updateExamDetails(exam.id, newType, examDate, examTime)
-                }
+                onDelete = null,
+                onSave = { _, _, _ -> }
             )
         }
     }
