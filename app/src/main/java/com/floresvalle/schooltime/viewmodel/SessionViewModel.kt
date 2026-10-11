@@ -577,6 +577,19 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun deleteCourse(courseId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                courseDao.softDeleteCourse(courseId)
+                if (currentUserId.isNotBlank()) {
+                    CloudSyncManager.deleteFromCloud(currentUserId, "courses", courseId)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     fun completeTaskWithGrade(taskId: String, grade: Double?) {
         viewModelScope.launch(Dispatchers.IO) {
             try {

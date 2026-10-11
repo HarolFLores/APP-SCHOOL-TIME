@@ -67,4 +67,7 @@ dependencies {
 
     // Navigation Compose
     implementation("androidx.navigation:navigation-compose:2.8.5")
+
+    // Unit Testing
+    testImplementation(libs.junit)
 }
