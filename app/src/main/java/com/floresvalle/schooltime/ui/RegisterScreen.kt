@@ -858,17 +858,19 @@ fun RegisterScreen(
                                 semesterError = AuthValidation.semesterError(semester)
                             }
                             // Si se completa el semestre (ej. 2026-I o 2026-II) y las fechas están vacías, autocompletar 16 semanas exactas
-                            val year = semester.take(4).toIntOrNull() ?: java.time.LocalDate.now().year
+                            val now = java.time.LocalDate.now()
+                            val typedYear = semester.take(4).toIntOrNull() ?: now.year
                             if (semester.endsWith("-I")) {
-                                startDate = "$year-03-16"
-                                endDate = "$year-07-06" // 16 semanas exactas
+                                val targetYear = if (now.monthValue >= 8 && typedYear <= now.year) now.year + 1 else typedYear
+                                startDate = "$targetYear-03-16"
+                                endDate = "$targetYear-07-06" // 16 semanas exactas
                                 if (attemptedSubmit) {
                                     startDateError = null
                                     endDateError = null
                                 }
                             } else if (semester.endsWith("-II")) {
-                                startDate = "$year-09-07"
-                                endDate = "$year-12-28" // 16 semanas fijas exactas (28 Dic)
+                                startDate = "$typedYear-09-07"
+                                endDate = "$typedYear-12-28" // 16 semanas fijas exactas (28 Dic)
                                 if (attemptedSubmit) {
                                     startDateError = null
                                     endDateError = null
@@ -923,14 +925,30 @@ fun RegisterScreen(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val currentYear = remember {
-                            semester.take(4).toIntOrNull() ?: java.time.LocalDate.now().year
-                        }
+                        val now = remember { java.time.LocalDate.now() }
+                        val currentYear = now.year
+                        val nextYear = currentYear + 1
+
                         AssistChip(
                             onClick = {
+                                semester = "$currentYear-II"
+                                startDate = "$currentYear-09-07"
+                                endDate = "$nextYear-01-04" // 17 semanas con aplazados
+                                if (attemptedSubmit) {
+                                    semesterError = null
+                                    startDateError = null
+                                    endDateError = null
+                                }
+                            },
+                            label = { Text("Ciclo II: 07 Sep - 04 Ene (17 sem)") }
+                        )
+                        AssistChip(
+                            onClick = {
+                                semester = "$currentYear-II"
                                 startDate = "$currentYear-09-07"
                                 endDate = "$currentYear-12-28" // 16 semanas fijas
                                 if (attemptedSubmit) {
+                                    semesterError = null
                                     startDateError = null
                                     endDateError = null
                                 }
@@ -939,21 +957,12 @@ fun RegisterScreen(
                         )
                         AssistChip(
                             onClick = {
-                                startDate = "$currentYear-09-07"
-                                val nextYear = currentYear + 1
-                                endDate = "$nextYear-01-04" // 17 semanas con aplazados
+                                val targetYear = if (now.monthValue >= 8) nextYear else currentYear
+                                semester = "$targetYear-I"
+                                startDate = "$targetYear-03-16"
+                                endDate = "$targetYear-07-06" // 16 semanas fijas
                                 if (attemptedSubmit) {
-                                    startDateError = null
-                                    endDateError = null
-                                }
-                            },
-                            label = { Text("Ciclo II + Aplazados (17 sem)") }
-                        )
-                        AssistChip(
-                            onClick = {
-                                startDate = "$currentYear-03-16"
-                                endDate = "$currentYear-07-06" // 16 semanas fijas
-                                if (attemptedSubmit) {
+                                    semesterError = null
                                     startDateError = null
                                     endDateError = null
                                 }

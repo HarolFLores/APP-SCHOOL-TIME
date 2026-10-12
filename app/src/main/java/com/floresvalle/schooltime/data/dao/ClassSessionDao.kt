@@ -36,6 +36,9 @@ interface ClassSessionDao {
     @Query("UPDATE sessions SET courseName = :newName, docente = :docente, startTime = :startTime, endTime = :endTime, sessionDate = :sessionDate, updatedAt = :timestamp WHERE id = :sessionId")
     suspend fun updateSessionDetails(sessionId: String, newName: String, docente: String?, startTime: String, endTime: String, sessionDate: String, timestamp: Long = System.currentTimeMillis()): Int
 
+    @Query("UPDATE sessions SET courseName = :newName, docente = :docente, startTime = :startTime, endTime = :endTime, updatedAt = :timestamp WHERE userId = :userId AND courseName = :oldName AND startTime = :oldStart AND endTime = :oldEnd AND isDeleted = 0")
+    suspend fun updateRecurringSessionDetails(userId: String, oldName: String, oldStart: String, oldEnd: String, newName: String, docente: String?, startTime: String, endTime: String, timestamp: Long = System.currentTimeMillis()): Int
+
     @Query("UPDATE sessions SET isDeleted = 1, syncState = 'PENDING_UPLOAD', updatedAt = :timestamp WHERE userId = :userId AND courseName = :courseName")
     suspend fun softDeleteAllSessionsForCourse(userId: String, courseName: String, timestamp: Long = System.currentTimeMillis()): Int
 

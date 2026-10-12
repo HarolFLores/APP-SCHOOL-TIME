@@ -28,10 +28,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
 import com.floresvalle.schooltime.data.entity.ClassSessionEntity
 import com.floresvalle.schooltime.data.entity.ExamEntity
 import com.floresvalle.schooltime.data.entity.TaskEntity
@@ -63,11 +65,21 @@ fun CalendarScreen(
     var isWeekView by remember { mutableStateOf(true) }
 
     val lazyListState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    val density = LocalDensity.current
 
-    // Auto-scroll to today's date on initial load
-    LaunchedEffect(Unit) {
-        val initialIndex = (todayCal.get(Calendar.DAY_OF_MONTH) - 1).coerceAtLeast(0)
-        lazyListState.scrollToItem(initialIndex)
+    // Auto-scroll to center the selected day whenever selectedDate, month or year changes
+    LaunchedEffect(selectedDate, currentCalendar.get(Calendar.MONTH), currentCalendar.get(Calendar.YEAR)) {
+        val prevDaysCount = 2 // 2 transition days from previous month
+        val targetIndex = (prevDaysCount + selectedDate - 1).coerceAtLeast(0)
+        val viewportWidth = lazyListState.layoutInfo.viewportSize.width
+        val itemWidthPx = with(density) { 62.dp.roundToPx() }
+        val centerOffset = (viewportWidth / 2) - (itemWidthPx / 2)
+        if (viewportWidth > 0) {
+            lazyListState.animateScrollToItem(targetIndex, scrollOffset = -centerOffset)
+        } else {
+            lazyListState.scrollToItem(targetIndex)
+        }
     }
 
     val allSessions by viewModel.sessions.collectAsState()
@@ -87,10 +99,10 @@ fun CalendarScreen(
     // Real Academic Period Check (Only completes when now > activePeriod.endDate)
     val nowLocalDate = LocalDate.now()
     val isCycleCompleted = remember(activePeriod) {
-        val periodEnd = activePeriod?.endDate
-        if (!periodEnd.isNullOrBlank()) {
+        val period = activePeriod
+        if (period != null && period.isActive && !period.endDate.isNullOrBlank()) {
             try {
-                val endDate = LocalDate.parse(periodEnd, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                val endDate = LocalDate.parse(period.endDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
                 nowLocalDate.isAfter(endDate)
             } catch (e: Exception) {
                 false
@@ -194,55 +206,62 @@ fun CalendarScreen(
                     }
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    color = MaterialTheme.colorScheme.surface
-                ) {
-                    Row {
-                        Box(
-                            modifier = Modifier
-                                .clickable { isWeekView = true }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(if (isWeekView) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                        ) {
-                            Text("Semana", style = MaterialTheme.typography.labelMedium, color = if (isWeekView) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = if (isWeekView) FontWeight.Bold else FontWeight.Normal)
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clickable { isWeekView = false }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(if (!isWeekView) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                        ) {
-                            Text("Mes", style = MaterialTheme.typography.labelMedium, color = if (!isWeekView) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = if (!isWeekView) FontWeight.Bold else FontWeight.Normal)
-                        }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Botón para vincular / abrir Google Calendar
+                    IconButton(
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW).setData(
+                                    Uri.parse("content://com.android.calendar/time/${System.currentTimeMillis()}")
+                                ).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                try {
+                                    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://calendar.google.com")).apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    context.startActivity(webIntent)
+                                } catch (e2: Exception) {
+                                    Toast.makeText(context, "Abriendo Google Calendar...", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.CalendarMonth,
+                            contentDescription = "Abrir Google Calendar",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
-                }
-            }
 
-            // Sync Status & Refresh Button
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF2E7D32)))
-                    Text("Room & Firebase Cloud Sync • Activo", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                }
-                Row(
-                    modifier = Modifier.clickable { viewModel.refreshData() },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (isRefreshing) {
-                        CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
-                    } else {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.primary)
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        color = MaterialTheme.colorScheme.surface
+                    ) {
+                        Row {
+                            Box(
+                                modifier = Modifier
+                                    .clickable { isWeekView = true }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(if (isWeekView) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                            ) {
+                                Text("Semana", style = MaterialTheme.typography.labelMedium, color = if (isWeekView) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = if (isWeekView) FontWeight.Bold else FontWeight.Normal)
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .clickable { isWeekView = false }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(if (!isWeekView) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                            ) {
+                                Text("Mes", style = MaterialTheme.typography.labelMedium, color = if (!isWeekView) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = if (!isWeekView) FontWeight.Bold else FontWeight.Normal)
+                            }
+                        }
                     }
-                    Text(if (isRefreshing) "Sincronizando..." else "Actualizar", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
             }
 

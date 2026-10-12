@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -37,6 +38,7 @@ import com.google.firebase.auth.auth
 import java.text.SimpleDateFormat
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -191,17 +193,19 @@ fun HomeScreen(
                 }
             }
 
+            val distinctCoursesCount = remember(sessions) {
+                sessions.map { it.courseName.trim().lowercase() }.distinct().size
+            }
+
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                val coursesCount = registeredCourses.size
-
                 item {
                     MetricCardDashboard(
-                        value = coursesCount.toString(),
-                        label = if (coursesCount == 1) "Curso Registrado" else "Cursos Registrados",
+                        value = distinctCoursesCount.toString(),
+                        label = if (distinctCoursesCount == 1) "Curso Registrado" else "Cursos Registrados",
                         icon = Icons.AutoMirrored.Filled.MenuBook,
                         chipText = "Activo",
                         chipColor = Color(0xFF3F51B5)
@@ -229,12 +233,12 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Next Class Imminent Section
+            // Next Class Imminent / Priority Section
             val sectionTitle = when(nextClassState) {
                 is SessionViewModel.NextClassState.InProgress -> "Clase en Curso"
-                is SessionViewModel.NextClassState.Imminent -> "Próxima Clase Inminente"
-                is SessionViewModel.NextClassState.Relaxed -> "Descanso"
-                is SessionViewModel.NextClassState.None -> "Clases"
+                is SessionViewModel.NextClassState.Imminent -> "Próxima Clase"
+                is SessionViewModel.NextClassState.Relaxed -> "Prioridad del Día"
+                is SessionViewModel.NextClassState.None -> "Prioridad del Día"
             }
 
             Row(
@@ -243,11 +247,20 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(if (nextClassState is SessionViewModel.NextClassState.Relaxed) Icons.Default.EventAvailable else Icons.Default.Bolt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Icon(
+                        if (nextClassState is SessionViewModel.NextClassState.Relaxed || nextClassState is SessionViewModel.NextClassState.None)
+                            Icons.Default.EventAvailable
+                        else
+                            Icons.Default.Bolt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                     Text(sectionTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
                 }
                 if (nextClassState is SessionViewModel.NextClassState.Imminent || nextClassState is SessionViewModel.NextClassState.InProgress) {
                     Text("PRIORIDAD ALTA", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                } else {
+                    Text("AL DÍA", style = MaterialTheme.typography.labelSmall, color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -565,14 +578,58 @@ fun NextClassCard(
     state: SessionViewModel.NextClassState,
     onClick: (ClassSessionEntity) -> Unit = {}
 ) {
+    val todayDeviceDateStr = remember {
+        try {
+            val locale = Locale("es", "PE")
+            val formatter = DateTimeFormatter.ofPattern("EEEE, d 'de' MMMM 'de' yyyy", locale)
+            LocalDate.now().format(formatter).replaceFirstChar { it.uppercase() }
+        } catch (e: Exception) {
+            LocalDate.now().toString()
+        }
+    }
+
     when (state) {
         is SessionViewModel.NextClassState.None -> {
-            Text(
-                text = "No tienes clases programadas.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 24.dp)
-            )
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        Icons.Default.EventAvailable,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        "No hay cursos para el día de hoy",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        todayDeviceDateStr,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        "No tienes cursos programados para esta semana.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
         }
         is SessionViewModel.NextClassState.Relaxed -> {
             ElevatedCard(
@@ -580,11 +637,57 @@ fun NextClassCard(
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.EventAvailable, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("Sin clases hoy ni mañana", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Text(state.futureDateText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        Icons.Default.EventAvailable,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        "No hay cursos para el día de hoy",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        todayDeviceDateStr,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                        modifier = Modifier.clickable { onClick(state.session) }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Schedule,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                "Próxima clase: ${state.session.courseName} (${state.futureDateText} • ${state.session.startTime})",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
         }

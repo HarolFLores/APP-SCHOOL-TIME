@@ -16,6 +16,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.time.LocalDate
 import java.util.UUID
 
 sealed class AuthResult<out T> {
@@ -192,14 +193,18 @@ class AuthRepository(private val context: Context) {
         try {
             val existingPeriod = academicPeriodDao.getActivePeriodSync(userId)
             if (existingPeriod == null) {
-                val periodName = if (semester.isNotBlank()) semester else "2026-I"
+                val now = LocalDate.now()
+                val currentYear = now.year
+                val isSecondHalf = now.monthValue >= 7
+                val periodName = if (semester.isNotBlank()) semester else if (isSecondHalf) "$currentYear-II" else "$currentYear-I"
                 val defaultPeriod = AcademicPeriodEntity(
                     userId = userId,
                     periodName = periodName,
-                    startDate = "2026-03-16",
-                    endDate = "2026-07-20",
+                    startDate = now.toString(),
+                    endDate = now.plusWeeks(16).toString(),
                     isActive = true
                 )
+                academicPeriodDao.deactivateAllPeriodsForUser(userId)
                 academicPeriodDao.upsertPeriod(defaultPeriod)
             }
         } catch (e: Exception) {
@@ -215,6 +220,7 @@ class AuthRepository(private val context: Context) {
         try {
             // Inserción en Room (Offline-First)
             userDao.insertUser(userEntity)
+            academicPeriodDao.deactivateAllPeriodsForUser(userEntity.id)
             academicPeriodDao.upsertPeriod(periodEntity)
             AuthPreferences.saveUserSession(context, userEntity.id, userEntity.email, true)
 

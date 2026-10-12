@@ -159,7 +159,21 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     CloudSyncManager.syncUserProfile(userToSync)
                     val activePeriod = academicPeriodDao.getActivePeriodSync(uid)
                     if (activePeriod != null) {
-                        CloudSyncManager.syncAcademicPeriod(activePeriod)
+                        try {
+                            val endDate = LocalDate.parse(activePeriod.endDate)
+                            if (endDate.isBefore(LocalDate.now())) {
+                                val updatedPeriod = activePeriod.copy(
+                                    startDate = LocalDate.now().toString(),
+                                    endDate = LocalDate.now().plusWeeks(16).toString()
+                                )
+                                academicPeriodDao.upsertPeriod(updatedPeriod)
+                                CloudSyncManager.syncAcademicPeriod(updatedPeriod)
+                            } else {
+                                CloudSyncManager.syncAcademicPeriod(activePeriod)
+                            }
+                        } catch (_: Exception) {
+                            CloudSyncManager.syncAcademicPeriod(activePeriod)
+                        }
                     }
                     Log.d("SchoolTimeSync", "Perfil y periodo sincronizados con Firestore: ${userToSync.email}")
                 } else {
@@ -176,15 +190,21 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
 
     private suspend fun getOrCreateCourse(targetUid: String, courseName: String, docente: String?): CourseEntity {
         var period = academicPeriodDao.getActivePeriodSync(targetUid)
+        val now = LocalDate.now()
+        val currentYear = now.year
+        val isSecondHalf = now.monthValue >= 7
+        val defaultPeriodName = if (isSecondHalf) "$currentYear-II" else "$currentYear-I"
+
         if (period == null) {
             period = AcademicPeriodEntity(
                 id = UUID.randomUUID().toString(),
                 userId = targetUid,
-                periodName = "2026-I",
-                startDate = LocalDate.now().toString(),
-                endDate = LocalDate.now().plusMonths(4).toString(),
+                periodName = defaultPeriodName,
+                startDate = now.toString(),
+                endDate = now.plusWeeks(16).toString(),
                 isActive = true
             )
+            academicPeriodDao.deactivateAllPeriodsForUser(targetUid)
             academicPeriodDao.upsertPeriod(period)
             CloudSyncManager.syncAcademicPeriod(period)
         } else {
@@ -450,23 +470,39 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 val targetUid = originalSession.userId
 
                 if (updateAllRecurring) {
-                    val allUserSessions = sessionDao.getAllActiveSessionsSync(targetUid)
-                    val sameScheduleSessions = allUserSessions.filter {
-                        it.courseName == oldCourseName && it.startTime == oldStart && it.endTime == oldEnd
-                    }
-                    sameScheduleSessions.forEach { otherSession ->
-                        sessionDao.updateSessionDetails(
-                            sessionId = otherSession.id,
+                    // Actualización atómica en la base de datos (evita flicker visual o cursos fantasma en la UI)
+                    sessionDao.updateRecurringSessionDetails(
+                        userId = targetUid,
+                        oldName = oldCourseName,
+                        oldStart = oldStart,
+                        oldEnd = oldEnd,
+                        newName = targetCourseName,
+                        docente = docente ?: originalSession.docente,
+                        startTime = startTime,
+                        endTime = endTime
+                    )
+
+                    // Actualizar también el registro en la tabla de cursos si el nombre o docente cambió
+                    val existingCourse = courseDao.getCourseByName(oldCourseName, targetUid)
+                    if (existingCourse != null) {
+                        courseDao.updateCourseDetails(
+                            courseId = existingCourse.id,
                             newName = targetCourseName,
-                            docente = docente ?: otherSession.docente,
-                            startTime = startTime,
-                            endTime = endTime,
-                            sessionDate = otherSession.sessionDate
+                            teacherName = docente ?: existingCourse.teacherName
                         )
-                        val syncedOther = sessionDao.getSessionById(otherSession.id)
-                        if (syncedOther != null) {
-                            CloudSyncManager.syncSession(syncedOther)
-                        }
+                        val updatedCourse = existingCourse.copy(
+                            name = targetCourseName,
+                            teacherName = docente ?: existingCourse.teacherName
+                        )
+                        CloudSyncManager.syncCourse(updatedCourse)
+                    }
+
+                    // Sincronización en la nube de las sesiones modificadas
+                    val updatedSessions = sessionDao.getAllActiveSessionsSync(targetUid).filter {
+                        it.courseName == targetCourseName && it.startTime == startTime && it.endTime == endTime
+                    }
+                    updatedSessions.forEach { syncedOther ->
+                        CloudSyncManager.syncSession(syncedOther)
                     }
                 } else {
                     sessionDao.updateSessionDetails(
@@ -493,12 +529,17 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val session = sessionDao.getSessionById(sessionId) ?: return@launch
                 if (deleteAllRecurring) {
-                    val allUserSessions = sessionDao.getAllActiveSessionsSync(session.userId)
-                    val sameScheduleSessions = allUserSessions.filter {
+                    val matchingSessions = sessionDao.getAllActiveSessionsSync(session.userId).filter {
                         it.courseName == session.courseName && it.startTime == session.startTime && it.endTime == session.endTime
                     }
-                    sameScheduleSessions.forEach { s ->
-                        sessionDao.softDeleteSession(s.id)
+                    // Eliminación atómica en SQLite para evitar transiciones intermedias
+                    sessionDao.softDeleteRecurringSessions(
+                        userId = session.userId,
+                        courseName = session.courseName,
+                        startTime = session.startTime,
+                        endTime = session.endTime
+                    )
+                    matchingSessions.forEach { s ->
                         CloudSyncManager.deleteFromCloud(s.userId, "class_sessions", s.id)
                     }
                 } else {
@@ -673,14 +714,17 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                 }
 
                 val period = academicPeriodDao.getActivePeriodSync(targetUid)
-                val endLocalDate = try {
+                val periodEnd = try {
                     if (!period?.endDate.isNullOrBlank()) {
                         LocalDate.parse(period.endDate, formatter)
-                    } else {
-                        baseLocalDate.plusMonths(4)
-                    }
-                } catch (e: Exception) {
-                    baseLocalDate.plusMonths(4)
+                    } else null
+                } catch (e: Exception) { null }
+
+                // Garantizar que el fin de ciclo sea al menos baseLocalDate + 16 semanas si estuviera vencido o en blanco
+                val endLocalDate = if (periodEnd == null || periodEnd.isBefore(baseLocalDate)) {
+                    baseLocalDate.plusWeeks(16)
+                } else {
+                    periodEnd
                 }
 
                 val sessionsToInsert = mutableListOf<ClassSessionEntity>()
@@ -704,6 +748,25 @@ class SessionViewModel(application: Application) : AndroidViewModel(application)
                     )
                     sessionsToInsert.add(newSession)
                     currentLocalDate = currentLocalDate.plusWeeks(1)
+                }
+
+                if (sessionsToInsert.isEmpty()) {
+                    sessionsToInsert.add(
+                        ClassSessionEntity(
+                            id = UUID.randomUUID().toString(),
+                            userId = targetUid,
+                            courseId = course.id,
+                            courseName = courseName,
+                            sessionDate = baseLocalDate.format(formatter),
+                            startTime = startTime,
+                            endTime = endTime,
+                            modality = modality,
+                            locationRoom = locationRoom,
+                            virtualUrl = virtualUrl,
+                            docente = docente,
+                            color = color
+                        )
+                    )
                 }
 
                 // Save in Room FIRST (Instant UI update!)

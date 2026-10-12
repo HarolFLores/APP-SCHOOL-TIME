@@ -13,6 +13,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.firestore
 import kotlinx.coroutines.tasks.await
+import java.time.LocalDate
 
 object CloudSyncManager {
     private const val TAG = "CloudSyncManager"
@@ -213,9 +214,13 @@ object CloudSyncManager {
             val periodsSnapshot = userRef.collection("academic_periods").get().await()
             val periods = periodsSnapshot.documents.mapNotNull { doc ->
                 try {
-                    val pName = doc.getString("name") ?: doc.getString("periodName") ?: "2026-I"
-                    val sDate = doc.getString("start_date") ?: doc.getString("startDate") ?: "2026-03-16"
-                    val eDate = doc.getString("end_date") ?: doc.getString("endDate") ?: "2026-07-20"
+                    val now = LocalDate.now()
+                    val currentYear = now.year
+                    val isSecondHalf = now.monthValue >= 7
+                    val defaultPName = if (isSecondHalf) "$currentYear-II" else "$currentYear-I"
+                    val pName = doc.getString("name") ?: doc.getString("periodName") ?: defaultPName
+                    val sDate = doc.getString("start_date") ?: doc.getString("startDate") ?: now.toString()
+                    val eDate = doc.getString("end_date") ?: doc.getString("endDate") ?: now.plusWeeks(16).toString()
                     val isAct = doc.getBoolean("is_active") ?: doc.getBoolean("isActive") ?: true
                     AcademicPeriodEntity(
                         id = doc.id,

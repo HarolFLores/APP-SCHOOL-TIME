@@ -28,6 +28,7 @@ import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.auth
 import com.google.firebase.auth.userProfileChangeRequest
+import java.time.LocalDate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -489,11 +490,12 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                                 currentSemester = "2026-I",
                                 currentCycle = "1er Ciclo"
                             )
+                            val now = LocalDate.now()
                             val periodToSave = pendingPeriodEntity ?: AcademicPeriodEntity(
                                 userId = user.uid,
                                 periodName = userToSave.currentSemester,
-                                startDate = "2026-03-16",
-                                endDate = "2026-07-20",
+                                startDate = now.toString(),
+                                endDate = now.plusWeeks(16).toString(),
                                 isActive = true
                             )
                             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
@@ -544,11 +546,12 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                             currentSemester = "2026-I",
                             currentCycle = "1er Ciclo"
                         )
+                        val now = LocalDate.now()
                         val periodToSave = pendingPeriodEntity ?: AcademicPeriodEntity(
                             userId = user.uid,
                             periodName = userToSave.currentSemester,
-                            startDate = "2026-03-16",
-                            endDate = "2026-07-20",
+                            startDate = now.toString(),
+                            endDate = now.plusWeeks(16).toString(),
                             isActive = true
                         )
                         viewModelScope.launch(Dispatchers.IO) {
@@ -695,11 +698,12 @@ class RegisterViewModel(application: Application) : AndroidViewModel(application
                         currentSemester = "2026-I",
                         currentCycle = "1er Ciclo"
                     )
+                    val now = LocalDate.now()
                     val periodToSave = pendingPeriodEntity ?: AcademicPeriodEntity(
                         userId = user!!.uid,
                         periodName = userToSave.currentSemester,
-                        startDate = "2026-03-16",
-                        endDate = "2026-07-20",
+                        startDate = now.toString(),
+                        endDate = now.plusWeeks(16).toString(),
                         isActive = true
                     )
                     repository.saveAndSyncUserRegistration(userToSave, periodToSave, "email")
