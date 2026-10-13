@@ -12,7 +12,7 @@ data class CourseEntity(
     val name: String,
     val code: String? = null,
     val teacherName: String? = null,
-    val colorHex: String? = "#0E7490",
+    val colorHex: String = "#0E7490",
     val credits: Int = 0,
     val updatedAt: Long = System.currentTimeMillis(),
     val isDeleted: Boolean = false

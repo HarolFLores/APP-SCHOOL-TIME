@@ -1,18 +1,13 @@
 package com.floresvalle.schooltime.ui
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,24 +17,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.floresvalle.schooltime.data.entity.ClassSessionEntity
 import com.floresvalle.schooltime.data.entity.ExamEntity
 import com.floresvalle.schooltime.data.entity.TaskEntity
+import com.floresvalle.schooltime.ui.components.AddContentBottomSheet
 import com.floresvalle.schooltime.ui.components.ClassDetailEditDialog
 import com.floresvalle.schooltime.ui.components.ExamDetailEditDialog
 import com.floresvalle.schooltime.ui.components.TaskDetailEditDialog
 import com.floresvalle.schooltime.viewmodel.SessionViewModel
-import com.google.firebase.Firebase
-import com.google.firebase.auth.auth
-import java.text.SimpleDateFormat
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import java.util.*
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,833 +41,561 @@ fun HomeScreen(
     onOpenNotifications: () -> Unit = {},
     onOpenQuickProfile: () -> Unit = {}
 ) {
-    val currentUser = Firebase.auth.currentUser
-    val userData by viewModel.currentUserData.collectAsState()
+    val userData by viewModel.currentUserData.collectAsStateWithLifecycle()
+    val allSessions: List<ClassSessionEntity> by viewModel.sessions.collectAsStateWithLifecycle(initialValue = emptyList())
+    val allTasks: List<TaskEntity> by viewModel.tasks.collectAsStateWithLifecycle(initialValue = emptyList())
+    val allExams: List<ExamEntity> by viewModel.exams.collectAsStateWithLifecycle(initialValue = emptyList())
+    val nextClassState by viewModel.nextClassState.collectAsStateWithLifecycle()
+    val averageGrade by viewModel.averageGrade.collectAsStateWithLifecycle(initialValue = 0.0)
 
-    val userName = userData?.firstName ?: currentUser?.displayName?.split(" ")?.firstOrNull() ?: "Estudiante"
-    val careerName = userData?.career ?: "Carrera Profesional"
-    val cycleName = userData?.currentCycle ?: "1er Ciclo"
-    val semesterName = userData?.currentSemester ?: "SEMESTRE ACTUAL"
-
-    val currentDateStr = remember {
-        val formatter = SimpleDateFormat("EEEE, d 'de' MMMM yyyy", Locale.getDefault())
-        formatter.format(Date()).replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+    val todayStr = remember {
+        LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+    }
+    val todaySessions = remember(allSessions, todayStr) {
+        allSessions.filter { it.sessionDate == todayStr }
     }
 
-    var currentTab by remember { mutableIntStateOf(0) }
-
-    val sessions by viewModel.sessions.collectAsState()
-    val dbExams by viewModel.exams.collectAsState()
-    val dbTasks by viewModel.tasks.collectAsState()
-
-    val nextClassState by viewModel.nextClassState.collectAsState()
-    val urgentTasksCount by viewModel.urgentTasksCount.collectAsState()
-    val urgentExamsCount by viewModel.urgentExamsCount.collectAsState()
-    val averageGrade by viewModel.averageGrade.collectAsState()
-    val liveNotifications by viewModel.liveNotifications.collectAsState()
-    val unreadNotifCount = liveNotifications.count { !it.isRead }
-
-    // Edit Dialog States
-    var selectedSessionForEdit by remember { mutableStateOf<ClassSessionEntity?>(null) }
-    var selectedTaskForEdit by remember { mutableStateOf<TaskEntity?>(null) }
-    var selectedExamForEdit by remember { mutableStateOf<ExamEntity?>(null) }
+    var selectedSessionForView by remember { mutableStateOf<ClassSessionEntity?>(null) }
+    var selectedTaskForView by remember { mutableStateOf<TaskEntity?>(null) }
+    var selectedExamForView by remember { mutableStateOf<ExamEntity?>(null) }
+    var showAddBottomSheet by remember { mutableStateOf(false) }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showAddBottomSheet = true },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.School, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
-                    }
-                    Column {
-                        Text("SchoolTime", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Box(contentAlignment = Alignment.TopEnd, modifier = Modifier.clickable { onOpenNotifications() }) {
-                        Icon(Icons.Default.NotificationsNone, contentDescription = "Notificaciones", tint = MaterialTheme.colorScheme.onSurface)
-                        if (unreadNotifCount > 0) {
-                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color.Red))
-                        }
-                    }
-                    Box(contentAlignment = Alignment.BottomEnd, modifier = Modifier.clickable { onOpenQuickProfile() }) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Person, contentDescription = "Perfil", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
-                        }
-                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF2E7D32)).padding(2.dp))
-                    }
-                }
+                Icon(Icons.Default.Add, contentDescription = "Agregar contenido")
             }
         }
-    ) { padding ->
-        Column(
+    ) { paddingValues ->
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
+                .padding(paddingValues)
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Context Row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(semesterName.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(currentDateStr, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Greeting
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Text(
-                    text = "¡Hola, $userName! \uD83D\uDC4B",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text(
-                    text = "$careerName • $cycleName",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Metrics Row
-            val registeredCourses = remember(sessions) {
-                sessions.groupBy { session ->
-                    val day = try {
-                        val d = LocalDate.parse(session.sessionDate)
-                        when (d.dayOfWeek) {
-                            DayOfWeek.MONDAY -> "Lunes"
-                            DayOfWeek.TUESDAY -> "Martes"
-                            DayOfWeek.WEDNESDAY -> "Miércoles"
-                            DayOfWeek.THURSDAY -> "Jueves"
-                            DayOfWeek.FRIDAY -> "Viernes"
-                            DayOfWeek.SATURDAY -> "Sábado"
-                            DayOfWeek.SUNDAY -> "Domingo"
-                            null -> ""
-                        }
-                    } catch (e: Exception) {
-                        ""
-                    }
-                    "${session.courseName}__${session.startTime}__${session.endTime}__$day"
-                }.values.mapNotNull { list ->
-                    val todayStr = LocalDate.now().toString()
-                    list.find { it.sessionDate >= todayStr } ?: list.firstOrNull()
-                }
-            }
-
-            val distinctCoursesCount = remember(sessions) {
-                sessions.map { it.courseName.trim().lowercase() }.distinct().size
-            }
-
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                item {
-                    MetricCardDashboard(
-                        value = distinctCoursesCount.toString(),
-                        label = if (distinctCoursesCount == 1) "Curso Registrado" else "Cursos Registrados",
-                        icon = Icons.AutoMirrored.Filled.MenuBook,
-                        chipText = "Activo",
-                        chipColor = Color(0xFF3F51B5)
-                    )
-                }
-                item {
-                    MetricCardDashboard(
-                        value = urgentExamsCount.toString(),
-                        label = if (urgentExamsCount == 0) "Sin exámenes próximos" else "Exámenes (48h)",
-                        icon = Icons.Default.NotificationsActive,
-                        chipText = if (urgentExamsCount == 0) "Al día" else "Atención",
-                        chipColor = if (urgentExamsCount == 0) Color(0xFF4CAF50) else Color(0xFFFF9800)
-                    )
-                }
-                item {
-                    MetricCardDashboard(
-                        value = urgentTasksCount.toString(),
-                        label = if (urgentTasksCount == 0) "Sin tareas pendientes" else "Tareas (48h)",
-                        icon = Icons.Default.Checklist,
-                        chipText = if (urgentTasksCount == 0) "Libre" else "Urgente",
-                        chipColor = if (urgentTasksCount == 0) Color(0xFF4CAF50) else Color(0xFFE91E63)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Next Class Imminent / Priority Section
-            val sectionTitle = when(nextClassState) {
-                is SessionViewModel.NextClassState.InProgress -> "Clase en Curso"
-                is SessionViewModel.NextClassState.Imminent -> "Próxima Clase"
-                is SessionViewModel.NextClassState.Relaxed -> "Prioridad del Día"
-                is SessionViewModel.NextClassState.None -> "Prioridad del Día"
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(
-                        if (nextClassState is SessionViewModel.NextClassState.Relaxed || nextClassState is SessionViewModel.NextClassState.None)
-                            Icons.Default.EventAvailable
-                        else
-                            Icons.Default.Bolt,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text(sectionTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                }
-                if (nextClassState is SessionViewModel.NextClassState.Imminent || nextClassState is SessionViewModel.NextClassState.InProgress) {
-                    Text("PRIORIDAD ALTA", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                } else {
-                    Text("AL DÍA", style = MaterialTheme.typography.labelSmall, color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            NextClassCard(nextClassState, onClick = { session ->
-                selectedSessionForEdit = session
-            })
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Filter Tabs for Content
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(50),
-                color = MaterialTheme.colorScheme.surfaceVariant
-            ) {
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(50))
-                            .background(if (currentTab == 0) MaterialTheme.colorScheme.primary else Color.Transparent)
-                            .clickable { currentTab = 0 }
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "Horario",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (currentTab == 0) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(50))
-                            .background(if (currentTab == 1) MaterialTheme.colorScheme.primary else Color.Transparent)
-                            .clickable { currentTab = 1 }
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "Trabajos",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (currentTab == 1) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(50))
-                            .background(if (currentTab == 2) MaterialTheme.colorScheme.primary else Color.Transparent)
-                            .clickable { currentTab = 2 }
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "Exámenes",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (currentTab == 2) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Content List Based on Tab
-            when (currentTab) {
-                0 -> {
-                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Default.School, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Text("Tus Cursos y Horarios", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                        }
-                        if (registeredCourses.isNotEmpty()) {
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                            ) {
-                                Text(
-                                    text = "${registeredCourses.size} ${if (registeredCourses.size == 1) "curso" else "cursos"}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    if (registeredCourses.isEmpty()) {
-                        Text("No has registrado ningún curso todavía. Presiona el botón + para empezar.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 24.dp))
-                    } else {
-                        registeredCourses.forEach { session ->
-                            val dayName = try {
-                                val d = LocalDate.parse(session.sessionDate)
-                                when (d.dayOfWeek) {
-                                    DayOfWeek.MONDAY -> "Lunes"
-                                    DayOfWeek.TUESDAY -> "Martes"
-                                    DayOfWeek.WEDNESDAY -> "Miércoles"
-                                    DayOfWeek.THURSDAY -> "Jueves"
-                                    DayOfWeek.FRIDAY -> "Viernes"
-                                    DayOfWeek.SATURDAY -> "Sábado"
-                                    DayOfWeek.SUNDAY -> "Domingo"
-                                    null -> ""
-                                }
-                            } catch (e: Exception) {
-                                ""
-                            }
-
-                            ScheduleItemCard(
-                                course = session.courseName,
-                                subtitle = if (dayName.isNotBlank()) "Todos los $dayName • ${session.modality}" else session.modality,
-                                modality = session.modality,
-                                time = "${session.startTime} - ${session.endTime}",
-                                duration = if (dayName.isNotBlank()) dayName else "",
-                                locationOrLink = session.locationRoom ?: session.virtualUrl ?: "Aula universitaria",
-                                isVirtual = session.modality.equals("Virtual", ignoreCase = true),
-                                onClick = { selectedSessionForEdit = session },
-                                indicatorColor = if (session.color != null) {
-                                    try {
-                                        Color(android.graphics.Color.parseColor(session.color))
-                                    } catch (e: Exception) {
-                                        MaterialTheme.colorScheme.primary
-                                    }
-                                } else MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                        }
-                    }
-                }
-                1 -> {
-                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Text("Trabajos Pendientes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    val activeTasks = dbTasks.filter { it.status == "Pendiente" }
-                    if (activeTasks.isEmpty()) {
-                        Text("No tienes trabajos pendientes en este momento.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 24.dp))
-                    } else {
-                        activeTasks.forEach { task ->
-                            ItemActivityCard(
-                                title = task.title,
-                                course = task.courseName,
-                                date = "${task.dueDate} ${task.dueTime}",
-                                icon = Icons.AutoMirrored.Filled.Assignment,
-                                color = MaterialTheme.colorScheme.error,
-                                onClick = { selectedTaskForEdit = task }
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                        }
-                    }
-                }
-                2 -> {
-                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Text("Exámenes Próximos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    val activeExamsList = dbExams.filter { it.status == "Pendiente" }
-                    if (activeExamsList.isEmpty()) {
-                        Text("No tienes exámenes programados por ahora.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 24.dp))
-                    } else {
-                        activeExamsList.forEach { exam ->
-                            ItemActivityCard(
-                                title = exam.type,
-                                course = exam.courseName,
-                                date = "${exam.examDate} ${exam.examTime}",
-                                icon = Icons.Default.NotificationsActive,
-                                color = MaterialTheme.colorScheme.tertiary,
-                                onClick = { selectedExamForEdit = exam }
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Rendimiento Promedio Real
-            val avgGradeStr = if (averageGrade != null) String.format(Locale.getDefault(), "%.2f", averageGrade) else "--"
-            val hasGrades = averageGrade != null
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+            item {
+                Spacer(Modifier.height(8.dp))
+                // Top Header: User Greeting & Action Icons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        modifier = Modifier
+                            .clickable { onOpenQuickProfile() }
+                            .padding(vertical = 4.dp)
                     ) {
-                        // Badge con la nota en la IZQUIERDA: jamás queda tapada por el FAB en la esquina inferior derecha
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = if (hasGrades) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                            border = BorderStroke(
-                                1.dp,
-                                if (hasGrades) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outlineVariant
-                            )
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Column(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = avgGradeStr,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Black,
-                                    color = if (hasGrades) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = "de 20 pts",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (hasGrades) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = "Perfil",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         }
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Timeline,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text(
-                                    "Rendimiento Promedio",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            val greetingName = userData?.let { "${it.firstName}" } ?: "Estudiante"
                             Text(
-                                if (hasGrades) "Promedio ponderado del ciclo académico" else "Sin evaluaciones registradas aún",
+                                text = "Hola, $greetingName 👋",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = userData?.career?.ifBlank { "Ingeniería de Sistemas" } ?: "Ingeniería de Sistemas",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Row {
+                        IconButton(onClick = onOpenNotifications) {
+                            Icon(
+                                Icons.Default.Notifications,
+                                contentDescription = "Notificaciones",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
 
-                    val progressVal = if (averageGrade != null) (averageGrade!! / 20.0).toFloat().coerceIn(0f, 1f) else 0f
-                    LinearProgressIndicator(
-                        progress = { progressVal },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+            // Next Class / Class Highlight Card
+            item {
+                NextClassCard(
+                    state = nextClassState,
+                    onClick = { session ->
+                        // ONLY view details in Home screen! No edit!
+                        selectedSessionForView = session
+                    }
+                )
+            }
+
+            // Dashboard Metrics
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    MetricCardDashboard(
+                        value = if (averageGrade > 0) String.format("%.1f", averageGrade) else "--",
+                        label = "Promedio",
+                        icon = Icons.Default.TrendingUp,
+                        chipText = "Actual",
+                        chipColor = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricCardDashboard(
+                        value = "${allTasks.size}",
+                        label = "Tareas",
+                        icon = Icons.Default.Assignment,
+                        chipText = "Pendientes",
+                        chipColor = Color(0xFFEAB308),
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricCardDashboard(
+                        value = "${allExams.size}",
+                        label = "Exámenes",
+                        icon = Icons.Default.EventNote,
+                        chipText = "Próximos",
+                        chipColor = Color(0xFFEF4444),
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+            // Today's schedule section
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Horario de Hoy",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("es", "PE"))).replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
-        // Dialogs (Modo solo visualización en Inicio)
-        selectedSessionForEdit?.let { session ->
-            ClassDetailEditDialog(
-                session = session,
-                canEdit = false,
-                onDismiss = { selectedSessionForEdit = null },
-                onDelete = null,
-                onSave = { _, _, _, _, _ -> }
-            )
-        }
+            if (todaySessions.isEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Text(
+                                text = "¡Sin clases programadas para hoy!",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Aprovecha para avanzar en tus tareas o repasar para tus exámenes.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            } else {
+                items(todaySessions, key = { it.id }) { session ->
+                    ScheduleItemCard(
+                        course = session.courseName,
+                        subtitle = session.docente ?: "Docente asignado",
+                        modality = session.modality,
+                        time = "${session.startTime} - ${session.endTime}",
+                        duration = "",
+                        locationOrLink = session.locationRoom ?: session.virtualUrl ?: "Aula por confirmar",
+                        isVirtual = session.modality.equals("Virtual", ignoreCase = true),
+                        onClick = {
+                            // ONLY VISUALIZE in Home! No edit!
+                            selectedSessionForView = session
+                        }
+                    )
+                }
+            }
 
-        selectedTaskForEdit?.let { task ->
-            TaskDetailEditDialog(
-                task = task,
-                canEdit = false,
-                onDismiss = { selectedTaskForEdit = null },
-                onDelete = null,
-                onSave = { _, _, _ -> }
-            )
-        }
+            // Pending Tasks & Upcoming Exams sections in Home
+            if (allTasks.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "Tareas Pendientes",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
 
-        selectedExamForEdit?.let { exam ->
-            ExamDetailEditDialog(
-                exam = exam,
-                canEdit = false,
-                onDismiss = { selectedExamForEdit = null },
-                onDelete = null,
-                onSave = { _, _, _ -> }
-            )
+                items(allTasks.take(3), key = { "home_task_${it.id}" }) { task ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                // ONLY VISUALIZE in Home! No edit!
+                                selectedTaskForView = task
+                            },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Assignment,
+                                contentDescription = null,
+                                tint = Color(0xFFEAB308),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = task.title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "${task.courseName} • Entrega: ${task.dueDate} ${task.dueTime}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                Icons.Default.Visibility,
+                                contentDescription = "Ver detalles",
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (allExams.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "Próximos Exámenes",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                items(allExams.take(3), key = { "home_exam_${it.id}" }) { exam ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                // ONLY VISUALIZE in Home! No edit!
+                                selectedExamForView = exam
+                            },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.EventNote,
+                                contentDescription = null,
+                                tint = Color(0xFFEF4444),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "${exam.type}: ${exam.courseName}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "Fecha: ${exam.examDate} ${exam.examTime}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                Icons.Default.Visibility,
+                                contentDescription = "Ver detalles",
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                Spacer(Modifier.height(24.dp))
+            }
         }
+    }
+
+    // Read-only Dialogs for Home Screen (canEdit = false)
+    selectedSessionForView?.let { session ->
+        ClassDetailEditDialog(
+            session = session,
+            canEdit = false, // Strictly VIEW ONLY in Inicio!
+            onDismiss = { selectedSessionForView = null },
+            onSave = { _, _, _, _ -> }
+        )
+    }
+
+    selectedTaskForView?.let { task ->
+        TaskDetailEditDialog(
+            task = task,
+            canEdit = false, // Strictly VIEW ONLY in Inicio!
+            onDismiss = { selectedTaskForView = null },
+            onSave = { _, _ -> }
+        )
+    }
+
+    selectedExamForView?.let { exam ->
+        ExamDetailEditDialog(
+            exam = exam,
+            canEdit = false, // Strictly VIEW ONLY in Inicio!
+            onDismiss = { selectedExamForView = null },
+            onSave = { _, _ -> }
+        )
+    }
+
+    if (showAddBottomSheet) {
+        AddContentBottomSheet(
+            viewModel = viewModel,
+            onDismiss = { showAddBottomSheet = false }
+        )
     }
 }
 
 @Composable
 fun NextClassCard(
     state: SessionViewModel.NextClassState,
-    onClick: (ClassSessionEntity) -> Unit = {}
+    onClick: (ClassSessionEntity) -> Unit
 ) {
-    val todayDeviceDateStr = remember {
-        try {
-            val locale = Locale("es", "PE")
-            val formatter = DateTimeFormatter.ofPattern("EEEE, d 'de' MMMM 'de' yyyy", locale)
-            LocalDate.now().format(formatter).replaceFirstChar { it.uppercase() }
-        } catch (e: Exception) {
-            LocalDate.now().toString()
-        }
-    }
-
-    when (state) {
-        is SessionViewModel.NextClassState.None -> {
-            ElevatedCard(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        Icons.Default.EventAvailable,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        "No hay cursos para el día de hoy",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        todayDeviceDateStr,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        "No tienes cursos programados para esta semana.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-        }
-        is SessionViewModel.NextClassState.Relaxed -> {
-            ElevatedCard(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        Icons.Default.EventAvailable,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        "No hay cursos para el día de hoy",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        todayDeviceDateStr,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-                        modifier = Modifier.clickable { onClick(state.session) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Schedule,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                "Próxima clase: ${state.session.courseName} (${state.futureDateText} • ${state.session.startTime})",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        is SessionViewModel.NextClassState.Imminent -> {
-            RenderSessionCard(
-                state.session,
-                state.timeUntilText,
-                "Pronto",
-                MaterialTheme.colorScheme.secondaryContainer,
-                MaterialTheme.colorScheme.onSecondaryContainer,
-                onClick = { onClick(state.session) }
-            )
-        }
-        is SessionViewModel.NextClassState.InProgress -> {
-            val sessionsList = state.sessions
-            if (sessionsList.size > 1) {
-                val pagerState = rememberPagerState(pageCount = { sessionsList.size })
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxWidth()
-                    ) { page ->
-                        RenderSessionCard(
-                            session = sessionsList[page],
-                            timeText = state.timeRemainingText,
-                            badgeText = "EN VIVO",
-                            badgeBg = MaterialTheme.colorScheme.errorContainer,
-                            badgeColor = MaterialTheme.colorScheme.onErrorContainer,
-                            onClick = { onClick(sessionsList[page]) }
-                        )
-                    }
-
-                    // Pager Indicators
-                    Spacer(modifier = Modifier.height(10.dp))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            when (state) {
+                is SessionViewModel.NextClassState.Live -> {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        repeat(sessionsList.size) { index ->
-                            val isSelected = pagerState.currentPage == index
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 4.dp)
-                                    .size(if (isSelected) 8.dp else 6.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isSelected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-                                    )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFEF4444)
+                        ) {
+                            Text(
+                                text = "EN VIVO AHORA",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "${pagerState.currentPage + 1} de ${sessionsList.size} en vivo",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "${state.session.startTime} - ${state.session.endTime}",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
+
+                    Text(
+                        text = state.session.courseName,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "📍 ${state.session.locationRoom ?: state.session.virtualUrl ?: state.session.modality}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Button(
+                        onClick = { onClick(state.session) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Ver Detalle de la Clase")
+                    }
                 }
-            } else if (sessionsList.isNotEmpty()) {
-                RenderSessionCard(
-                    session = sessionsList.first(),
-                    timeText = state.timeRemainingText,
-                    badgeText = "EN VIVO",
-                    badgeBg = MaterialTheme.colorScheme.errorContainer,
-                    badgeColor = MaterialTheme.colorScheme.onErrorContainer,
-                    onClick = { onClick(sessionsList.first()) }
-                )
+
+                is SessionViewModel.NextClassState.Upcoming -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        ) {
+                            Text(
+                                text = "PRÓXIMA CLASE",
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                        Text(
+                            text = state.timeRemainingText,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Text(
+                        text = state.session.courseName,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "⏰ ${state.session.startTime} - ${state.session.endTime} • ${state.session.locationRoom ?: state.session.modality}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Button(
+                        onClick = { onClick(state.session) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Ver Detalle")
+                    }
+                }
+
+                SessionViewModel.NextClassState.NoClasses -> {
+                    Text(
+                        text = "Sin clases pendientes hoy",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Has completado tus clases o no hay clases registradas para este horario.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun RenderSessionCard(
-    session: ClassSessionEntity,
-    timeText: String,
-    badgeText: String,
-    badgeBg: Color,
-    badgeColor: Color,
-    onClick: () -> Unit = {}
+fun MetricCardDashboard(
+    value: String,
+    label: String,
+    icon: ImageVector,
+    chipText: String,
+    chipColor: Color,
+    modifier: Modifier = Modifier
 ) {
-    val isVirtual = session.modality.equals("Virtual", ignoreCase = true)
-
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable { onClick() },
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Surface(shape = RoundedCornerShape(50), color = badgeBg) {
-                        Text(badgeText, style = MaterialTheme.typography.labelSmall, color = badgeColor, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), fontWeight = FontWeight.Bold)
-                    }
-                    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceVariant) {
-                        Text(timeText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), fontWeight = FontWeight.Bold)
-                    }
-                }
-                Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(if (isVirtual) Icons.Default.Videocam else Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                        Text(session.modality, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(session.courseName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                    }
-                    Column {
-                        Text("Docente", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
-                        Text(session.docente ?: "No asignado", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("Horario", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
-                    Text("${session.startTime} - ${session.endTime}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth().height(48.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = chipColor,
+                    modifier = Modifier.size(20.dp)
+                )
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = chipColor.copy(alpha = 0.15f)
                 ) {
-                    Icon(
-                        if (isVirtual) Icons.Default.LaptopMac else Icons.Default.LocationOn,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isVirtual) "Clase 100% Virtual / En línea" else (session.locationRoom ?: "Aula por confirmar"),
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
+                        text = chipText,
+                        color = chipColor,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun MetricCardDashboard(value: String, label: String, icon: ImageVector, chipText: String, chipColor: Color) {
-    ElevatedCard(
-        modifier = Modifier
-            .width(150.dp)
-            .height(130.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-                    Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(16.dp), tint = chipColor)
-                }
-                Surface(shape = RoundedCornerShape(50), color = chipColor.copy(alpha = 0.15f)) {
-                    Text(chipText, style = MaterialTheme.typography.labelSmall, color = chipColor, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontWeight = FontWeight.Bold)
-                }
-            }
-            Column {
-                Text(text = value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
-            }
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -890,105 +609,62 @@ fun ScheduleItemCard(
     duration: String,
     locationOrLink: String,
     isVirtual: Boolean,
-    onClick: () -> Unit = {},
-    indicatorColor: Color = MaterialTheme.colorScheme.primary
-) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable { onClick() },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 16.dp)) {
-            Box(modifier = Modifier.width(4.dp).height(40.dp).clip(RoundedCornerShape(50)).background(indicatorColor))
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(course, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                        Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    val modalityBg = if (isVirtual) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
-                    val modalityTextColor = if (isVirtual) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
-                    Surface(shape = RoundedCornerShape(50), color = modalityBg) {
-                        Text(modality, style = MaterialTheme.typography.labelSmall, color = modalityTextColor, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp), fontWeight = FontWeight.Medium)
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (duration.isNotEmpty()) {
-                        Text("  •  $duration", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-
-                if (isVirtual) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LaptopMac, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Clase Virtual / En línea", 
-                                style = MaterialTheme.typography.labelSmall, 
-                                color = MaterialTheme.colorScheme.onSurface, 
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Text("Ver curso →", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = locationOrLink, 
-                                style = MaterialTheme.typography.labelSmall, 
-                                color = MaterialTheme.colorScheme.onSurface, 
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Text("Ver curso →", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ItemActivityCard(
-    title: String,
-    course: String,
-    date: String,
-    icon: ImageVector,
-    color: Color,
-    onClick: () -> Unit = {}
+    onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable { onClick() },
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
-            }
-            Spacer(modifier = Modifier.width(16.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(48.dp)
+                    .background(
+                        if (isVirtual) Color(0xFF3B82F6) else MaterialTheme.colorScheme.primary,
+                        RoundedCornerShape(2.dp)
+                    )
+            )
+            Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text(course, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(date, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                Text(
+                    text = course,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "⏰ $time • $locationOrLink",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "👨‍🏫 $subtitle",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = if (isVirtual) Color(0xFFDBEAFE) else MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Text(
+                    text = modality,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isVirtual) Color(0xFF1D4ED8) else MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
             }
         }
     }

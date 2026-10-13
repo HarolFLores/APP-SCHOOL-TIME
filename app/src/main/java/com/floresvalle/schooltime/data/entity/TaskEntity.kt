@@ -6,20 +6,19 @@ import java.util.UUID
 
 @Entity(tableName = "tasks")
 data class TaskEntity(
-    @PrimaryKey
-    val id: String = UUID.randomUUID().toString(),
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val userId: String,
-    val courseId: String = UUID.randomUUID().toString(),
+    val courseId: String = "",
     val courseName: String,
     val title: String,
     val dueDate: String,
     val dueTime: String,
-    val modality: String, // Individual / Grupal
-    val urgency: String, // Baja / Media / Alta
-    val link: String?,
-    val status: String = "Pendiente", // Pendiente / Completado / No entregado
+    val modality: String = "Individual",
+    val urgency: String = "Media",
+    val link: String? = null,
+    val status: String = "Pendiente",
     val grade: Double? = null,
     val updatedAt: Long = System.currentTimeMillis(),
     val isDeleted: Boolean = false,
-    val syncState: String = "PENDING_UPLOAD"
+    val syncState: String = "SYNCED"
 )

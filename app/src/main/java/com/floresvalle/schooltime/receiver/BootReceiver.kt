@@ -11,9 +11,7 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             NotificationChannels.createChannels(context)
-
-            val workRequest = OneTimeWorkRequestBuilder<EvaluationWorker>().build()
-            WorkManager.getInstance(context).enqueue(workRequest)
+            WorkManager.getInstance(context).enqueue(OneTimeWorkRequestBuilder<EvaluationWorker>().build())
         }
     }
 }

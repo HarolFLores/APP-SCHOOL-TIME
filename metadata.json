@@ -1,6 +1,6 @@
 {
   "name": "SchoolTime",
-  "description": "Aplicación para gestión de horarios escolares, tareas, exámenes y clases con notificaciones y sincronización.",
+  "description": "Aplicación académica escolar para gestión de horarios, cursos, tareas, evaluaciones y exámenes.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -2,10 +2,11 @@ package com.floresvalle.schooltime.data.entity
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import java.util.UUID
 
 @Entity(tableName = "users")
 data class UserEntity(
-    @PrimaryKey val id: String,
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val email: String,
     val password: String? = null,
     val firstName: String,
@@ -13,9 +14,9 @@ data class UserEntity(
     val career: String,
     val currentSemester: String,
     val currentCycle: String,
-    val phone: String = "",
+    val phone: String,
     val photoUri: String? = null,
     val enrolledCredits: Int = 0,
     val weightedAverage: Double = 0.0,
-    val syncState: String = "PENDING_UPLOAD"
+    val syncState: String = "SYNCED"
 )

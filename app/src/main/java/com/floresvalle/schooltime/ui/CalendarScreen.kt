@@ -1,25 +1,25 @@
 package com.floresvalle.schooltime.ui
 
+import android.content.Context
 import android.content.Intent
-import android.net.Uri
-import androidx.compose.foundation.BorderStroke
+import android.provider.CalendarContract
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Assignment
-import androidx.compose.material.icons.automirrored.filled.EventNote
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,564 +31,879 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import android.widget.Toast
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.floresvalle.schooltime.data.entity.ClassSessionEntity
 import com.floresvalle.schooltime.data.entity.ExamEntity
 import com.floresvalle.schooltime.data.entity.TaskEntity
+import com.floresvalle.schooltime.ui.components.AddSessionBottomSheet
 import com.floresvalle.schooltime.ui.components.ClassDetailEditDialog
 import com.floresvalle.schooltime.ui.components.ExamDetailEditDialog
 import com.floresvalle.schooltime.ui.components.TaskDetailEditDialog
 import com.floresvalle.schooltime.viewmodel.SessionViewModel
-import java.text.SimpleDateFormat
+import kotlinx.coroutines.launch
+import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.YearMonth
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.*
+import java.time.format.TextStyle
+import java.util.Locale
+
+enum class CalendarViewMode {
+    STRIP,      // Vista tira horizontal deslizante continua
+    FULL_MONTH  // Vista cuadrícula completa del mes
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(
     viewModel: SessionViewModel,
     onOpenNotifications: () -> Unit = {},
-    onOpenQuickProfile: () -> Unit = {}
+    onOpenProfileDialog: () -> Unit = {},
+    onBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val todayCal = remember { Calendar.getInstance() }
-    val realTodayYear = todayCal.get(Calendar.YEAR)
-    val realTodayMonth = todayCal.get(Calendar.MONTH)
-    val realTodayDay = todayCal.get(Calendar.DAY_OF_MONTH)
-
-    var currentCalendar by remember { mutableStateOf(todayCal.clone() as Calendar) }
-    var selectedDate by remember { mutableIntStateOf(todayCal.get(Calendar.DAY_OF_MONTH)) }
-    var isWeekView by remember { mutableStateOf(true) }
-
-    val lazyListState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val coroutineScope = rememberCoroutineScope()
 
-    // Auto-scroll to center the selected day whenever selectedDate, month or year changes
-    LaunchedEffect(selectedDate, currentCalendar.get(Calendar.MONTH), currentCalendar.get(Calendar.YEAR)) {
-        val prevDaysCount = 2 // 2 transition days from previous month
-        val targetIndex = (prevDaysCount + selectedDate - 1).coerceAtLeast(0)
-        val viewportWidth = lazyListState.layoutInfo.viewportSize.width
-        val itemWidthPx = with(density) { 62.dp.roundToPx() }
-        val centerOffset = (viewportWidth / 2) - (itemWidthPx / 2)
-        if (viewportWidth > 0) {
-            lazyListState.animateScrollToItem(targetIndex, scrollOffset = -centerOffset)
-        } else {
-            lazyListState.scrollToItem(targetIndex)
+    val allSessions: List<ClassSessionEntity> by viewModel.sessions.collectAsStateWithLifecycle(initialValue = emptyList())
+    val allTasks: List<TaskEntity> by viewModel.tasks.collectAsStateWithLifecycle(initialValue = emptyList())
+    val allExams: List<ExamEntity> by viewModel.exams.collectAsStateWithLifecycle(initialValue = emptyList())
+
+    val today = remember { LocalDate.now() }
+    var selectedDate by remember { mutableStateOf(today) }
+    var currentYearMonth by remember { mutableStateOf(YearMonth.from(today)) }
+    var viewMode by remember { mutableStateOf(CalendarViewMode.STRIP) }
+
+    // Multi-month continuous day list: 3 months back to 12 months ahead
+    // Allows seamless continuous scrolling across month boundaries
+    val continuousDays = remember {
+        val startMonth = YearMonth.from(today).minusMonths(3)
+        val endMonth = YearMonth.from(today).plusMonths(12)
+        val list = mutableListOf<LocalDate>()
+        var curr = startMonth.atDay(1)
+        val end = endMonth.atEndOfMonth()
+        while (!curr.isAfter(end)) {
+            list.add(curr)
+            curr = curr.plusDays(1)
         }
+        list
     }
 
-    val allSessions by viewModel.sessions.collectAsState()
-    val allTasks by viewModel.tasks.collectAsState()
-    val allExams by viewModel.exams.collectAsState()
-    val activePeriod by viewModel.activeAcademicPeriod.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val liveNotifications by viewModel.liveNotifications.collectAsState()
-    val unreadNotifCount = liveNotifications.count { !it.isRead }
+    val listState = rememberLazyListState()
 
-    // Dialog & Sheet States
-    var selectedSessionForEdit by remember { mutableStateOf<ClassSessionEntity?>(null) }
-    var selectedTaskForEdit by remember { mutableStateOf<TaskEntity?>(null) }
-    var selectedExamForEdit by remember { mutableStateOf<ExamEntity?>(null) }
-    var selectedMonthDayEvents by remember { mutableStateOf<Triple<String, List<ClassSessionEntity>, List<Any>>?>(null) }
+    // Smooth centering of selected date in horizontal LazyRow
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val screenWidth = maxWidth
+        val itemWidth = 64.dp
+        val centerOffsetPx = with(density) {
+            ((screenWidth - itemWidth) / 2).roundToPx()
+        }
 
-    // Real Academic Period Check (Only completes when now > activePeriod.endDate)
-    val nowLocalDate = LocalDate.now()
-    val isCycleCompleted = remember(activePeriod) {
-        val period = activePeriod
-        if (period != null && period.isActive && !period.endDate.isNullOrBlank()) {
-            try {
-                val endDate = LocalDate.parse(period.endDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"))
-                nowLocalDate.isAfter(endDate)
-            } catch (e: Exception) {
-                false
+        // Animate scroll to center when selectedDate changes
+        LaunchedEffect(selectedDate) {
+            val index = continuousDays.indexOf(selectedDate)
+            if (index >= 0) {
+                listState.animateScrollToItem(index, scrollOffset = -centerOffsetPx)
             }
-        } else {
-            false
         }
-    }
 
-    val currentMonthYearStr = remember(currentCalendar.timeInMillis) {
-        val formatter = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
-        formatter.format(currentCalendar.time).replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
-    }
+        // Dynamic month header update as user scrolls horizontally past month end
+        val centerItemIndex by remember {
+            derivedStateOf {
+                val first = listState.firstVisibleItemIndex
+                val totalVisible = listState.layoutInfo.visibleItemsInfo.size
+                first + (totalVisible / 2).coerceAtLeast(0)
+            }
+        }
 
-    val daysInMonth = remember(currentCalendar.timeInMillis) {
-        currentCalendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-    }
-
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.School, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
-                    }
-                    Column {
-                        Text("SchoolTime", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                        Text("Calendario", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Box(contentAlignment = Alignment.TopEnd, modifier = Modifier.clickable { onOpenNotifications() }) {
-                        Icon(Icons.Default.NotificationsNone, contentDescription = "Notificaciones", tint = MaterialTheme.colorScheme.onSurface)
-                        if (unreadNotifCount > 0) {
-                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color.Red))
-                        }
-                    }
-                    Box(contentAlignment = Alignment.BottomEnd, modifier = Modifier.clickable { onOpenQuickProfile() }) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Person, contentDescription = "Perfil", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
-                        }
-                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF2E7D32)).padding(2.dp))
-                    }
+        LaunchedEffect(centerItemIndex) {
+            continuousDays.getOrNull(centerItemIndex)?.let { dateInCenter ->
+                val month = YearMonth.from(dateInCenter)
+                if (month != currentYearMonth) {
+                    currentYearMonth = month
                 }
             }
         }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            // Month Header & Navigation Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(currentMonthYearStr, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    IconButton(
-                        onClick = {
-                            val newCal = currentCalendar.clone() as Calendar
-                            newCal.add(Calendar.MONTH, -1)
-                            currentCalendar = newCal
-                            selectedDate = minOf(selectedDate, newCal.getActualMaximum(Calendar.DAY_OF_MONTH))
-                        },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Mes anterior")
-                    }
-                    IconButton(
-                        onClick = {
-                            val newCal = currentCalendar.clone() as Calendar
-                            newCal.add(Calendar.MONTH, 1)
-                            currentCalendar = newCal
-                            selectedDate = minOf(selectedDate, newCal.getActualMaximum(Calendar.DAY_OF_MONTH))
-                        },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Mes siguiente")
-                    }
-                }
 
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Botón para vincular / abrir Google Calendar
-                    IconButton(
-                        onClick = {
-                            try {
-                                val intent = Intent(Intent.ACTION_VIEW).setData(
-                                    Uri.parse("content://com.android.calendar/time/${System.currentTimeMillis()}")
-                                ).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
+        val selectedDateStr = remember(selectedDate) {
+            selectedDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+        }
+
+        val dateSessions = remember(allSessions, selectedDateStr) {
+            allSessions.filter { it.sessionDate == selectedDateStr }
+        }
+        val dateTasks = remember(allTasks, selectedDateStr) {
+            allTasks.filter { it.dueDate == selectedDateStr }
+        }
+        val dateExams = remember(allExams, selectedDateStr) {
+            allExams.filter { it.examDate == selectedDateStr }
+        }
+
+        val uniqueCourses = remember(allSessions) {
+            allSessions.groupBy { it.courseName }
+        }
+
+        var selectedSessionForEdit by remember { mutableStateOf<ClassSessionEntity?>(null) }
+        var selectedTaskForView by remember { mutableStateOf<TaskEntity?>(null) }
+        var selectedExamForView by remember { mutableStateOf<ExamEntity?>(null) }
+        var showAddSessionBottomSheet by remember { mutableStateOf(false) }
+
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(
+                                text = "Calendario Escolar",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = currentYearMonth.format(
+                                    DateTimeFormatter.ofPattern("MMMM yyyy", Locale("es", "PE"))
+                                ).replaceFirstChar { it.uppercase() },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Regresar")
+                        }
+                    },
+                    actions = {
+                        // Google Calendar Direct Sync Icon
+                        IconButton(
+                            onClick = {
                                 try {
-                                    val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://calendar.google.com")).apply {
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                    context.startActivity(webIntent)
-                                } catch (e2: Exception) {
+                                    val intent = Intent(Intent.ACTION_INSERT)
+                                        .setData(CalendarContract.Events.CONTENT_URI)
+                                        .putExtra(CalendarContract.Events.TITLE, "Clases SchoolTime")
+                                        .putExtra(CalendarContract.Events.DESCRIPTION, "Sincronización con Google Calendar")
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
                                     Toast.makeText(context, "Abriendo Google Calendar...", Toast.LENGTH_SHORT).show()
                                 }
                             }
-                        },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.CalendarMonth,
-                            contentDescription = "Abrir Google Calendar",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                        color = MaterialTheme.colorScheme.surface
-                    ) {
-                        Row {
-                            Box(
-                                modifier = Modifier
-                                    .clickable { isWeekView = true }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .background(if (isWeekView) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                            ) {
-                                Text("Semana", style = MaterialTheme.typography.labelMedium, color = if (isWeekView) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = if (isWeekView) FontWeight.Bold else FontWeight.Normal)
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .clickable { isWeekView = false }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .background(if (!isWeekView) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                            ) {
-                                Text("Mes", style = MaterialTheme.typography.labelMedium, color = if (!isWeekView) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = if (!isWeekView) FontWeight.Bold else FontWeight.Normal)
-                            }
+                        ) {
+                            Icon(
+                                Icons.Default.Event,
+                                contentDescription = "Google Calendar",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(onClick = onOpenNotifications) {
+                            Icon(Icons.Default.Notifications, contentDescription = "Notificaciones")
                         }
                     }
-                }
-            }
-
-            if (isCycleCompleted) {
-                Spacer(modifier = Modifier.height(12.dp))
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                ) {
-                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("🎓", style = MaterialTheme.typography.headlineLarge)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text("¡Felicidades!", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                            Text("¡Has concluido el ciclo académico con éxito!", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f))
-                        }
-                    }
-                }
-            }
-
-            if (isWeekView) {
-                LazyRow(
-                    state = lazyListState,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Previous month boundary transition day
-                    val prevCal = currentCalendar.clone() as Calendar
-                    prevCal.add(Calendar.MONTH, -1)
-                    val daysInPrevMonth = prevCal.getActualMaximum(Calendar.DAY_OF_MONTH)
-
-                    item {
-                        val edgeCal = prevCal.clone() as Calendar
-                        edgeCal.set(Calendar.DAY_OF_MONTH, daysInPrevMonth)
-                        val isEdgeToday = (daysInPrevMonth == realTodayDay &&
-                                          prevCal.get(Calendar.MONTH) == realTodayMonth &&
-                                          prevCal.get(Calendar.YEAR) == realTodayYear)
-                        DayItem(
-                            date = edgeCal,
-                            isSelected = false,
-                            isToday = isEdgeToday,
-                            dotsCount = 0,
-                            onDaySelected = {
-                                currentCalendar = prevCal
-                                selectedDate = daysInPrevMonth
-                            }
-                        )
-                    }
-
-                    // Current month days
-                    items(daysInMonth) { dayIdx ->
-                        val dayNum = dayIdx + 1
-                        val calItem = currentCalendar.clone() as Calendar
-                        calItem.set(Calendar.DAY_OF_MONTH, dayNum)
-
-                        val isRealToday = (dayNum == realTodayDay &&
-                                           currentCalendar.get(Calendar.MONTH) == realTodayMonth &&
-                                           currentCalendar.get(Calendar.YEAR) == realTodayYear)
-
-                        val dateStr = String.format(Locale.getDefault(), "%04d-%02d-%02d",
-                            calItem.get(Calendar.YEAR),
-                            calItem.get(Calendar.MONTH) + 1,
-                            dayNum
-                        )
-                        val sessionsCount = allSessions.count { it.sessionDate == dateStr }
-                        val tasksCount = allTasks.count { it.dueDate == dateStr }
-                        val examsCount = allExams.count { it.examDate == dateStr }
-                        val totalEvents = sessionsCount + tasksCount + examsCount
-
-                        DayItem(
-                            date = calItem,
-                            isSelected = dayNum == selectedDate,
-                            isToday = isRealToday,
-                            dotsCount = minOf(totalEvents, 3),
-                            onDaySelected = { selectedDay ->
-                                selectedDate = selectedDay
-                            }
-                        )
-                    }
-
-                    // Next month boundary transition day
-                    val nextCal = currentCalendar.clone() as Calendar
-                    nextCal.add(Calendar.MONTH, 1)
-
-                    item {
-                        val edgeCal = nextCal.clone() as Calendar
-                        edgeCal.set(Calendar.DAY_OF_MONTH, 1)
-                        val isEdgeToday = (1 == realTodayDay &&
-                                          nextCal.get(Calendar.MONTH) == realTodayMonth &&
-                                          nextCal.get(Calendar.YEAR) == realTodayYear)
-                        DayItem(
-                            date = edgeCal,
-                            isSelected = false,
-                            isToday = isEdgeToday,
-                            dotsCount = 0,
-                            onDaySelected = {
-                                currentCalendar = nextCal
-                                selectedDate = 1
-                            }
-                        )
-                    }
-                }
-
-                val formattedSelectedDate = String.format(Locale.getDefault(), "%04d-%02d-%02d",
-                    currentCalendar.get(Calendar.YEAR),
-                    currentCalendar.get(Calendar.MONTH) + 1,
-                    selectedDate
                 )
-                val dailySessions = allSessions.filter { it.sessionDate == formattedSelectedDate }
-                val dailyTasks = allTasks.filter { it.dueDate == formattedSelectedDate }
-                val dailyExams = allExams.filter { it.examDate == formattedSelectedDate }
-                val totalDayEvents = dailySessions.size + dailyTasks.size + dailyExams.size
-
-                val summaryCal = currentCalendar.clone() as Calendar
-                summaryCal.set(Calendar.DAY_OF_MONTH, selectedDate)
-                val summaryFormatter = SimpleDateFormat("EEEE, d 'de' MMMM", Locale.getDefault())
-                val summaryDateStr = summaryFormatter.format(summaryCal.time).replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
-
-                val summarySubtitle = buildString {
-                    val parts = mutableListOf<String>()
-                    if (dailySessions.isNotEmpty()) parts.add("${dailySessions.size} ${if (dailySessions.size == 1) "cátedra" else "cátedras"}")
-                    if (dailyTasks.isNotEmpty()) parts.add("${dailyTasks.size} ${if (dailyTasks.size == 1) "tarea" else "tareas"}")
-                    if (dailyExams.isNotEmpty()) parts.add("${dailyExams.size} ${if (dailyExams.size == 1) "examen" else "exámenes"}")
-                    if (parts.isEmpty()) append("Sin actividades programadas") else append(parts.joinToString(" • "))
-                }
-
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    elevation = CardDefaults.elevatedCardElevation(0.dp)
+            },
+            floatingActionButton = {
+                FloatingActionButton(
+                    onClick = { showAddSessionBottomSheet = true },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.CalendarToday, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                            }
-                            Column {
-                                Text(summaryDateStr, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                                Text(summarySubtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
+                    Icon(Icons.Default.Add, contentDescription = "Agregar Sesión")
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                if (totalDayEvents == 0) {
+            }
+        ) { paddingValues ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Header with Month Navigation and View Mode Toggle
+                item {
                     Column(
-                        modifier = Modifier.fillMaxWidth().weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(text = "🎉", style = MaterialTheme.typography.displayMedium)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text("Sin pendientes este día", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("Tómate un respiro, no hay clases ni evaluaciones agendadas.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
-                        contentPadding = PaddingValues(bottom = 80.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(dailySessions, key = { it.id }) { session ->
-                            SessionCardItem(
-                                session = session,
-                                onClick = { selectedSessionForEdit = session },
-                                onOpenUrl = { url ->
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                        context.startActivity(intent)
-                                    } catch (e: Exception) { e.printStackTrace() }
+                        // Month Selector Controls & "Hoy" button
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = {
+                                        val prevMonth = currentYearMonth.minusMonths(1)
+                                        currentYearMonth = prevMonth
+                                        selectedDate = prevMonth.atDay(1)
+                                    }
+                                ) {
+                                    Icon(Icons.Default.ChevronLeft, contentDescription = "Mes Anterior")
                                 }
+                                Text(
+                                    text = currentYearMonth.month.getDisplayName(TextStyle.FULL, Locale("es", "PE"))
+                                        .replaceFirstChar { it.uppercase() } + " " + currentYearMonth.year,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                IconButton(
+                                    onClick = {
+                                        val nextMonth = currentYearMonth.plusMonths(1)
+                                        currentYearMonth = nextMonth
+                                        selectedDate = nextMonth.atDay(1)
+                                    }
+                                ) {
+                                    Icon(Icons.Default.ChevronRight, contentDescription = "Siguiente Mes")
+                                }
+                            }
+
+                            FilledTonalButton(
+                                onClick = {
+                                    selectedDate = today
+                                    currentYearMonth = YearMonth.from(today)
+                                },
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Icon(Icons.Default.Today, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Hoy", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+
+                        // Toggle between Strip view and Full Month Grid
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip(
+                                selected = viewMode == CalendarViewMode.STRIP,
+                                onClick = { viewMode = CalendarViewMode.STRIP },
+                                label = { Text("Tira Deslizable") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.ViewWeek,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
                             )
-                        }
-
-                        items(dailyTasks, key = { it.id }) { task ->
-                            ElevatedCard(
-                                modifier = Modifier.fillMaxWidth().clickable { selectedTaskForEdit = task },
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(MaterialTheme.colorScheme.errorContainer),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(task.courseName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                                        Text(task.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                        Text("Entrega límite: ${task.dueTime.ifBlank { "23:59" }} • ${task.urgency}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        }
-
-                        items(dailyExams, key = { it.id }) { exam ->
-                            ElevatedCard(
-                                modifier = Modifier.fillMaxWidth().clickable { selectedExamForEdit = exam },
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(MaterialTheme.colorScheme.tertiaryContainer),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Icons.AutoMirrored.Filled.EventNote, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(20.dp))
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(exam.courseName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)
-                                        Text(exam.type, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                        Text("Horario: ${exam.examTime} • ${exam.modality}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
+                            FilterChip(
+                                selected = viewMode == CalendarViewMode.FULL_MONTH,
+                                onClick = { viewMode = CalendarViewMode.FULL_MONTH },
+                                label = { Text("Mes Completo") },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.CalendarMonth,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                 }
-            } else {
-                val yearMonth = YearMonth.of(currentCalendar.get(Calendar.YEAR), currentCalendar.get(Calendar.MONTH) + 1)
-                val firstDayOfWeek = yearMonth.atDay(1).dayOfWeek.value % 7
 
-                Column(modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceAround) {
-                        listOf("Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb").forEach { day ->
-                            Text(day, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
+                // CALENDAR DISPLAY AREA (STRIP or FULL MONTH GRID)
+                item {
+                    if (viewMode == CalendarViewMode.STRIP) {
+                        // Continuous Horizontal Day Selector
+                        // STRICTLY UNIFORM SIZE: width 64.dp, height 82.dp for every single card
+                        // Center aligned on tap, smooth month transition on swipe
+                        LazyRow(
+                            state = listState,
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            itemsIndexed(continuousDays, key = { _, date -> date.toString() }) { index, date ->
+                                val isSelected = date == selectedDate
+                                val isDateToday = date == today
+                                val hasSessions = allSessions.any { it.sessionDate == date.toString() }
+                                val dayOfWeekShort = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale("es", "PE"))
+                                    .replaceFirstChar { it.uppercase() }
 
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(7),
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(firstDayOfWeek) {
-                            Box(modifier = Modifier.size(40.dp))
-                        }
-
-                        items(daysInMonth) { dayIdx ->
-                            val dayNum = dayIdx + 1
-                            val isRealTodayInMonth = (dayNum == realTodayDay &&
-                                                      currentCalendar.get(Calendar.MONTH) == realTodayMonth &&
-                                                      currentCalendar.get(Calendar.YEAR) == realTodayYear)
-
-                            val dateStr = String.format(Locale.getDefault(), "%04d-%02d-%02d",
-                                currentCalendar.get(Calendar.YEAR),
-                                currentCalendar.get(Calendar.MONTH) + 1,
-                                dayNum
-                            )
-
-                            val daySessions = allSessions.filter { it.sessionDate == dateStr }
-                            val dayTasks = allTasks.filter { it.dueDate == dateStr }
-                            val dayExams = allExams.filter { it.examDate == dateStr }
-                            val totalEvents = daySessions.size + dayTasks.size + dayExams.size
-
-                            val isSelected = dayNum == selectedDate
-
-                            val boxBgColor = when {
-                                isSelected -> MaterialTheme.colorScheme.primary
-                                isRealTodayInMonth -> MaterialTheme.colorScheme.primaryContainer
-                                else -> MaterialTheme.colorScheme.surfaceVariant
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .aspectRatio(1f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(boxBgColor)
-                                    .border(if (isRealTodayInMonth && !isSelected) 1.5.dp else 0.dp, if (isRealTodayInMonth) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(12.dp))
-                                    .clickable {
-                                        selectedDate = dayNum
-                                        if (totalEvents > 0) {
-                                            val allEvents = mutableListOf<Any>()
-                                            allEvents.addAll(dayTasks)
-                                            allEvents.addAll(dayExams)
-                                            selectedMonthDayEvents = Triple(dateStr, daySessions, allEvents)
+                                Card(
+                                    modifier = Modifier
+                                        .width(64.dp)
+                                        .height(82.dp)
+                                        .clickable {
+                                            selectedDate = date
+                                            currentYearMonth = YearMonth.from(date)
+                                            coroutineScope.launch {
+                                                listState.animateScrollToItem(index, scrollOffset = -centerOffsetPx)
+                                            }
+                                        },
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = when {
+                                            isSelected -> MaterialTheme.colorScheme.primary
+                                            isDateToday -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+                                            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                                         }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    if (isRealTodayInMonth) {
-                                        Text("HOY", style = MaterialTheme.typography.labelSmall, fontSize = 7.sp, fontWeight = FontWeight.Bold, color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary)
-                                    }
-                                    Text(
-                                        text = dayNum.toString(),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else if (isRealTodayInMonth) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                    )
-                                    if (totalEvents > 0) {
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                            repeat(minOf(totalEvents, 3)) {
+                                    ),
+                                    elevation = CardDefaults.cardElevation(if (isSelected) 3.dp else 0.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(vertical = 8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = dayOfWeekShort,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = "${date.dayOfMonth}",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        // Fixed-size dot container so card vertical height never shifts
+                                        Box(
+                                            modifier = Modifier.size(6.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (hasSessions) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(4.dp)
+                                                        .size(5.dp)
                                                         .clip(CircleShape)
-                                                        .background(if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary)
+                                                        .background(
+                                                            if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                                            else MaterialTheme.colorScheme.primary
+                                                        )
                                                 )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // FULL MONTH GRID VIEW (Eliminates the empty blank space!)
+                        // Renders a complete 7-column calendar matrix for currentYearMonth
+                        FullMonthGridView(
+                            yearMonth = currentYearMonth,
+                            selectedDate = selectedDate,
+                            today = today,
+                            allSessions = allSessions,
+                            onDateSelected = { date ->
+                                selectedDate = date
+                            }
+                        )
+                    }
+                }
+
+                // Google Calendar Action Banner
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                        ),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    Icons.Default.CalendarToday,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = "Vincular con Google Calendar",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Exporta o abre tu calendario de clases fácilmente",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Button(
+                                onClick = {
+                                    try {
+                                        val intent = Intent(Intent.ACTION_INSERT)
+                                            .setData(CalendarContract.Events.CONTENT_URI)
+                                            .putExtra(CalendarContract.Events.TITLE, "Semestre Académico - SchoolTime")
+                                            .putExtra(CalendarContract.Events.DESCRIPTION, "Horario de clases")
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Abriendo Google Calendar...", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Text("Abrir", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
+
+                // Selected Date Activities Header
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = selectedDate.format(
+                                DateTimeFormatter.ofPattern("EEEE, d 'de' MMMM", Locale("es", "PE"))
+                            ).replaceFirstChar { it.uppercase() },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "${dateSessions.size} clase(s)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                // SESSIONS FOR SELECTED DATE (COMPLETE DETAILED CARDS)
+                // In Calendar: COURSES CAN BE EDITED!
+                if (dateSessions.isNotEmpty()) {
+                    items(dateSessions, key = { it.id }) { session ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            elevation = CardDefaults.cardElevation(2.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .width(4.dp)
+                                                .height(44.dp)
+                                                .background(
+                                                    if (session.modality.equals("Virtual", ignoreCase = true)) Color(0xFF3B82F6)
+                                                    else MaterialTheme.colorScheme.primary,
+                                                    RoundedCornerShape(2.dp)
+                                                )
+                                        )
+                                        Spacer(Modifier.width(12.dp))
+                                        Column {
+                                            Text(
+                                                text = session.courseName,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "⏰ ${session.startTime} - ${session.endTime}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
+
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (session.modality.equals("Virtual", ignoreCase = true)) Color(0xFFDBEAFE) else MaterialTheme.colorScheme.primaryContainer
+                                    ) {
+                                        Text(
+                                            text = session.modality,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (session.modality.equals("Virtual", ignoreCase = true)) Color(0xFF1E40AF) else MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "📍 ${session.locationRoom ?: session.virtualUrl ?: "Aula por confirmar"}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    if (!session.docente.isNullOrBlank()) {
+                                        Text(
+                                            text = "👨‍🏫 ${session.docente}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
+                                }
+
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                                // Quick Action Buttons: EDIT (Allowed here in Calendar!) and Google Calendar
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            addToGoogleCalendar(
+                                                context = context,
+                                                title = session.courseName,
+                                                description = "Profesor: ${session.docente ?: "Sin asignar"} • Modalidad: ${session.modality}",
+                                                location = session.locationRoom ?: session.virtualUrl ?: "Campus",
+                                                dateStr = session.sessionDate,
+                                                startTimeStr = session.startTime,
+                                                endTimeStr = session.endTime
+                                            )
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(Icons.Default.Event, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Google Calendar", style = MaterialTheme.typography.labelMedium)
+                                    }
+
+                                    Spacer(Modifier.width(8.dp))
+
+                                    Button(
+                                        onClick = { selectedSessionForEdit = session },
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Editar Curso", style = MaterialTheme.typography.labelMedium)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Tasks on this day (Read-only in Calendar)
+                if (dateTasks.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Tareas para este día",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        )
+                    }
+                    items(dateTasks, key = { "t_${it.id}" }) { task ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp)
+                                .clickable { selectedTaskForView = task },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Assignment, contentDescription = null, tint = Color(0xFFEAB308))
+                                Spacer(Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(task.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                    Text("${task.courseName} • Hora: ${task.dueTime}", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Icon(Icons.Default.Visibility, contentDescription = "Ver", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                }
+
+                // Exams on this day (Read-only in Calendar)
+                if (dateExams.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Exámenes para este día",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        )
+                    }
+                    items(dateExams, key = { "e_${it.id}" }) { exam ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp)
+                                .clickable { selectedExamForView = exam },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.EventNote, contentDescription = null, tint = Color(0xFFEF4444))
+                                Spacer(Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("${exam.type}: ${exam.courseName}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                    Text("Hora: ${exam.examTime}", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Icon(Icons.Default.Visibility, contentDescription = "Ver", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                }
+
+                // Empty state for selected date - clean helpful card
+                if (dateSessions.isEmpty() && dateTasks.isEmpty() && dateExams.isEmpty()) {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.EventAvailable,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Text(
+                                    text = "Sin actividades para este día",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "No tienes clases ni evaluaciones registradas para el ${selectedDate.dayOfMonth} de ${selectedDate.month.getDisplayName(TextStyle.FULL, Locale("es", "PE"))}.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                OutlinedButton(
+                                    onClick = { showAddSessionBottomSheet = true },
+                                    modifier = Modifier.padding(top = 4.dp)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Agregar Clase en esta fecha")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // FULL CYCLE COURSES OVERVIEW SECTION
+                // Displays full course cards so there is never an awkward empty void
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Todos tus Cursos y Horarios",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "${uniqueCourses.keys.size} curso(s)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                if (uniqueCourses.isEmpty()) {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Aún no tienes cursos registrados",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Button(onClick = { showAddSessionBottomSheet = true }) {
+                                    Icon(Icons.Default.Add, contentDescription = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Agregar Mi Primer Curso")
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    items(uniqueCourses.entries.toList(), key = { it.key }) { entry ->
+                        val courseName = entry.key
+                        val sessions = entry.value
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            elevation = CardDefaults.cardElevation(1.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = courseName,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer
+                                    ) {
+                                        Text(
+                                            text = "${sessions.size} sesión(es)",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    sessions.forEach { s ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .clickable {
+                                                    // In Calendar: Clicking allows editing the session!
+                                                    selectedSessionForEdit = s
+                                                }
+                                                .padding(vertical = 4.dp, horizontal = 2.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = "📅 ${s.sessionDate} • ${s.startTime} - ${s.endTime}",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                                Text(
+                                                    text = "${s.locationRoom ?: s.modality}${if (!s.docente.isNullOrBlank()) " • Prof: ${s.docente}" else ""}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                IconButton(
+                                                    onClick = {
+                                                        addToGoogleCalendar(
+                                                            context = context,
+                                                            title = s.courseName,
+                                                            description = "Profesor: ${s.docente ?: "Sin asignar"} • Modalidad: ${s.modality}",
+                                                            location = s.locationRoom ?: s.virtualUrl ?: "Campus",
+                                                            dateStr = s.sessionDate,
+                                                            startTimeStr = s.startTime,
+                                                            endTimeStr = s.endTime
+                                                        )
+                                                    },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Event,
+                                                        contentDescription = "Google Calendar",
+                                                        modifier = Modifier.size(16.dp),
+                                                        tint = MaterialTheme.colorScheme.secondary
+                                                    )
+                                                }
+
+                                                Spacer(Modifier.width(4.dp))
+
+                                                IconButton(
+                                                    onClick = { selectedSessionForEdit = s },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Edit,
+                                                        contentDescription = "Editar",
+                                                        modifier = Modifier.size(16.dp),
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -597,250 +912,256 @@ fun CalendarScreen(
                         }
                     }
                 }
+
+                item {
+                    Spacer(Modifier.height(32.dp))
+                }
             }
         }
+
+        // In Calendar: Course EDIT Dialog (canEdit = true)
+        selectedSessionForEdit?.let { session ->
+            ClassDetailEditDialog(
+                session = session,
+                canEdit = true, // EDITABLE in Calendar!
+                onDismiss = { selectedSessionForEdit = null },
+                onSave = { newDate, newStart, newEnd, newDocente ->
+                    viewModel.updateSessionDetails(session.id, newStart, newEnd, newDate, newDocente.ifBlank { null })
+                    selectedSessionForEdit = null
+                },
+                onDelete = {
+                    viewModel.deleteSession(session.id)
+                    selectedSessionForEdit = null
+                }
+            )
+        }
+
+        // In Calendar: Tasks & Exams are VIEW ONLY
+        selectedTaskForView?.let { task ->
+            TaskDetailEditDialog(
+                task = task,
+                canEdit = false,
+                onDismiss = { selectedTaskForView = null },
+                onSave = { _, _ -> }
+            )
+        }
+
+        selectedExamForView?.let { exam ->
+            ExamDetailEditDialog(
+                exam = exam,
+                canEdit = false,
+                onDismiss = { selectedExamForView = null },
+                onSave = { _, _ -> }
+            )
+        }
+
+        if (showAddSessionBottomSheet) {
+            AddSessionBottomSheet(
+                onDismiss = { showAddSessionBottomSheet = false },
+                onAddSession = { name, date, start, end, modality, room, url ->
+                    viewModel.addSession(
+                        courseName = name,
+                        startTime = start,
+                        endTime = end,
+                        modality = modality,
+                        sessionDate = date,
+                        locationRoom = room,
+                        virtualUrl = url,
+                        docente = null
+                    )
+                    showAddSessionBottomSheet = false
+                }
+            )
+        }
+    }
+}
+
+/**
+ * Full Month Grid View:
+ * Renders all 28-31 days in a structured 7-column calendar matrix.
+ * Shows day numbers, current selection, today indicator, and class count dots.
+ * Fills the width gracefully to prevent awkward empty voids.
+ */
+@Composable
+fun FullMonthGridView(
+    yearMonth: YearMonth,
+    selectedDate: LocalDate,
+    today: LocalDate,
+    allSessions: List<ClassSessionEntity>,
+    onDateSelected: (LocalDate) -> Unit
+) {
+    val daysOfWeek = remember {
+        listOf(
+            DayOfWeek.MONDAY,
+            DayOfWeek.TUESDAY,
+            DayOfWeek.WEDNESDAY,
+            DayOfWeek.THURSDAY,
+            DayOfWeek.FRIDAY,
+            DayOfWeek.SATURDAY,
+            DayOfWeek.SUNDAY
+        )
     }
 
-    // Modal Sheet for Day Events in Month View
-    selectedMonthDayEvents?.let { (dateStr, sessionsList, otherEvents) ->
-        ModalBottomSheet(
-            onDismissRequest = { selectedMonthDayEvents = null },
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
-                Text("Eventos del $dateStr", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
+    val firstDayOfMonth = remember(yearMonth) { yearMonth.atDay(1) }
+    val daysInMonth = remember(yearMonth) { yearMonth.lengthOfMonth() }
 
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.heightIn(max = 350.dp)) {
-                    items(sessionsList) { session ->
-                        SessionCardItem(session = session, onClick = {
-                            selectedMonthDayEvents = null
-                            selectedSessionForEdit = session
-                        })
-                    }
-                    items(otherEvents) { event ->
-                        if (event is TaskEntity) {
-                            ElevatedCard(
-                                modifier = Modifier.fillMaxWidth().clickable {
-                                    selectedMonthDayEvents = null
-                                    selectedTaskForEdit = event
-                                },
-                                shape = RoundedCornerShape(12.dp)
+    // Day of week offset (Monday = 0, Sunday = 6)
+    val startDayOffset = remember(firstDayOfMonth) {
+        (firstDayOfMonth.dayOfWeek.value - 1) % 7
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Days of Week Header: Lun, Mar, Mié, Jue, Vie, Sáb, Dom
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                daysOfWeek.forEach { dow ->
+                    val label = dow.getDisplayName(TextStyle.SHORT, Locale("es", "PE"))
+                        .take(3)
+                        .replaceFirstChar { it.uppercase() }
+                    Text(
+                        text = label,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // Calendar Days Matrix
+            val totalCells = startDayOffset + daysInMonth
+            val totalRows = (totalCells + 6) / 7
+
+            for (rowIndex in 0 until totalRows) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    for (colIndex in 0 until 7) {
+                        val cellIndex = rowIndex * 7 + colIndex
+                        val dayNumber = cellIndex - startDayOffset + 1
+
+                        if (dayNumber in 1..daysInMonth) {
+                            val cellDate = yearMonth.atDay(dayNumber)
+                            val isSelected = cellDate == selectedDate
+                            val isDateToday = cellDate == today
+                            val sessionCount = allSessions.count { it.sessionDate == cellDate.toString() }
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .aspectRatio(1f)
+                                    .padding(2.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        when {
+                                            isSelected -> MaterialTheme.colorScheme.primary
+                                            isDateToday -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                            else -> Color.Transparent
+                                        }
+                                    )
+                                    .clickable { onDateSelected(cellDate) },
+                                contentAlignment = Alignment.Center
                             ) {
-                                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column {
-                                        Text(event.title, fontWeight = FontWeight.Bold)
-                                        Text("${event.courseName} • Tarea", style = MaterialTheme.typography.bodySmall)
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = "$dayNumber",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isSelected || isDateToday) FontWeight.Bold else FontWeight.Normal,
+                                        color = when {
+                                            isSelected -> MaterialTheme.colorScheme.onPrimary
+                                            isDateToday -> MaterialTheme.colorScheme.onPrimaryContainer
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+
+                                    if (sessionCount > 0) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(4.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                                    else MaterialTheme.colorScheme.primary
+                                                )
+                                        )
+                                    } else {
+                                        Spacer(modifier = Modifier.size(4.dp))
                                     }
                                 }
                             }
-                        } else if (event is ExamEntity) {
-                            ElevatedCard(
-                                modifier = Modifier.fillMaxWidth().clickable {
-                                    selectedMonthDayEvents = null
-                                    selectedExamForEdit = event
-                                },
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary)
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column {
-                                        Text(event.type, fontWeight = FontWeight.Bold)
-                                        Text("${event.courseName} • Examen", style = MaterialTheme.typography.bodySmall)
-                                    }
-                                }
-                            }
+                        } else {
+                            // Blank spacer for pre-month and post-month empty cells
+                            Spacer(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .aspectRatio(1f)
+                                    .padding(2.dp)
+                            )
                         }
                     }
                 }
             }
         }
     }
-
-    // Detail / Edit Dialogs
-    selectedSessionForEdit?.let { session ->
-        ClassDetailEditDialog(
-            session = session,
-            canEdit = true,
-            onDismiss = { selectedSessionForEdit = null },
-            onDelete = {
-                viewModel.deleteSession(session.id, deleteAllRecurring = true)
-                selectedSessionForEdit = null
-            },
-            onSave = { newCourseName, docente, startTime, endTime, sessionDate ->
-                viewModel.updateSessionDetails(session.id, newCourseName, docente, startTime, endTime, sessionDate)
-            }
-        )
-    }
-
-    selectedTaskForEdit?.let { task ->
-        TaskDetailEditDialog(
-            task = task,
-            canEdit = true,
-            onDismiss = { selectedTaskForEdit = null },
-            onDelete = {
-                viewModel.deleteTask(task.id)
-                selectedTaskForEdit = null
-            },
-            onSave = { newTitle, dueDate, dueTime ->
-                viewModel.updateTaskDetails(task.id, newTitle, dueDate, dueTime)
-            }
-        )
-    }
-
-    selectedExamForEdit?.let { exam ->
-        ExamDetailEditDialog(
-            exam = exam,
-            canEdit = true,
-            onDismiss = { selectedExamForEdit = null },
-            onDelete = {
-                viewModel.deleteExam(exam.id)
-                selectedExamForEdit = null
-            },
-            onSave = { newType, examDate, examTime ->
-                viewModel.updateExamDetails(exam.id, newType, examDate, examTime)
-            }
-        )
-    }
 }
 
-@Composable
-fun DayItem(
-    date: Calendar,
-    isSelected: Boolean,
-    isToday: Boolean,
-    dotsCount: Int,
-    onDaySelected: (Int) -> Unit
+/**
+ * Helper to launch Google Calendar intent with specific class session details
+ */
+fun addToGoogleCalendar(
+    context: Context,
+    title: String,
+    description: String,
+    location: String,
+    dateStr: String,
+    startTimeStr: String,
+    endTimeStr: String
 ) {
-    val dayName = date.getDisplayName(Calendar.DAY_OF_WEEK, Calendar.SHORT, Locale.getDefault()) ?: ""
-    val dayOfMonth = date.get(Calendar.DAY_OF_MONTH)
+    try {
+        val intent = Intent(Intent.ACTION_INSERT)
+            .setData(CalendarContract.Events.CONTENT_URI)
+            .putExtra(CalendarContract.Events.TITLE, title)
+            .putExtra(CalendarContract.Events.DESCRIPTION, description)
+            .putExtra(CalendarContract.Events.EVENT_LOCATION, location)
 
-    val bgColor = when {
-        isSelected -> MaterialTheme.colorScheme.primary
-        isToday -> MaterialTheme.colorScheme.primaryContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant
-    }
-
-    val textColor = when {
-        isSelected -> MaterialTheme.colorScheme.onPrimary
-        isToday -> MaterialTheme.colorScheme.onPrimaryContainer
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-
-    val borderColor = if (isToday && !isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-
-    Column(
-        modifier = Modifier
-            .width(58.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(bgColor)
-            .border(if (isToday && !isSelected) 1.5.dp else 0.dp, borderColor, RoundedCornerShape(24.dp))
-            .clickable { onDaySelected(dayOfMonth) }
-            .padding(vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        if (isToday) {
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.25f) else MaterialTheme.colorScheme.primary
-            ) {
-                Text(
-                    text = "HOY",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(2.dp))
+        try {
+            val date = LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE)
+            val start = LocalTime.parse(startTimeStr, DateTimeFormatter.ofPattern("HH:mm"))
+            val end = LocalTime.parse(endTimeStr, DateTimeFormatter.ofPattern("HH:mm"))
+            val startMillis = LocalDateTime.of(date, start)
+                .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val endMillis = LocalDateTime.of(date, end)
+                .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            intent.putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startMillis)
+            intent.putExtra(CalendarContract.EXTRA_EVENT_END_TIME, endMillis)
+        } catch (_: Exception) {
+            // Ignore time parsing exception and fall back to plain insert
         }
 
-        Text(
-            text = dayName.take(3),
-            style = MaterialTheme.typography.labelSmall,
-            color = if (isSelected) Color.White.copy(alpha = 0.8f) else if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Medium
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = dayOfMonth.toString(),
-            style = MaterialTheme.typography.titleMedium,
-            color = textColor,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (dotsCount > 0) {
-                val dotColor = if (isSelected) Color.White else MaterialTheme.colorScheme.primary
-                repeat(dotsCount) {
-                    Box(modifier = Modifier.size(4.dp).clip(CircleShape).background(dotColor))
-                }
-            } else {
-                Box(modifier = Modifier.size(4.dp).background(Color.Transparent))
-            }
-        }
-    }
-}
-
-@Composable
-fun SessionCardItem(
-    session: ClassSessionEntity,
-    onClick: () -> Unit,
-    onOpenUrl: (String) -> Unit = {}
-) {
-    val isVirtual = session.modality.equals("Virtual", ignoreCase = true)
-
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(session.courseName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = if (isVirtual) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
-                ) {
-                    Text(
-                        text = session.modality,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isVirtual) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("${session.startTime} - ${session.endTime}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (isVirtual) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.LaptopMac, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Clase Virtual / En línea", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                }
-            } else {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(session.locationRoom ?: "Aula por asignar", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                }
-            }
-        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        Toast.makeText(context, "No se pudo abrir la aplicación de calendario", Toast.LENGTH_SHORT).show()
     }
 }

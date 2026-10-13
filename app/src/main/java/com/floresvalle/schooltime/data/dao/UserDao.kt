@@ -9,17 +9,14 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface UserDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertUser(user: UserEntity): Long
-
     @Query("SELECT * FROM users LIMIT 1")
-    fun getUser(): Flow<UserEntity?>
+    fun getFirstUserFlow(): Flow<UserEntity?>
 
-    @Query("SELECT * FROM users WHERE id = :userId LIMIT 1")
-    fun getUserById(userId: String): Flow<UserEntity?>
+    @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
+    fun getUserByIdFlow(id: String): Flow<UserEntity?>
 
-    @Query("SELECT * FROM users WHERE id = :userId LIMIT 1")
-    suspend fun getUserByIdOnce(userId: String): UserEntity?
+    @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
+    suspend fun getUserById(id: String): UserEntity?
 
     @Query("SELECT * FROM users WHERE email = :email LIMIT 1")
     suspend fun getUserByEmail(email: String): UserEntity?
@@ -27,18 +24,15 @@ interface UserDao {
     @Query("SELECT COUNT(*) > 0 FROM users WHERE LOWER(email) = LOWER(:email)")
     suspend fun existsByEmail(email: String): Boolean
 
-    @Query("DELETE FROM users WHERE id = :userId")
-    suspend fun deleteUserById(userId: String): Int
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdate(user: UserEntity): Long
 
-    @Query("DELETE FROM users")
-    suspend fun clearAllUsers(): Int
+    @Query("UPDATE users SET photoUri = :photoUri, syncState = 'PENDING_UPLOAD' WHERE id = :id")
+    suspend fun updatePhotoUri(id: String, photoUri: String): Int
 
-    @Query("UPDATE users SET career = :career, email = :email, syncState = 'PENDING_UPLOAD' WHERE id = :userId")
-    suspend fun updateUserProfile(userId: String, career: String, email: String): Int
+    @Query("UPDATE users SET career = :career, email = :email, syncState = 'PENDING_UPLOAD' WHERE id = :id")
+    suspend fun updateRestrictedProfile(id: String, career: String, email: String): Int
 
-    @Query("UPDATE users SET photoUri = :photoUri, syncState = 'PENDING_UPLOAD' WHERE id = :userId")
-    suspend fun updatePhotoUri(userId: String, photoUri: String?): Int
-
-    @Query("UPDATE users SET weightedAverage = :avg, syncState = 'PENDING_UPLOAD' WHERE id = :userId")
-    suspend fun updateWeightedAverage(userId: String, avg: Double): Int
+    @Query("UPDATE users SET weightedAverage = :average, syncState = 'PENDING_UPLOAD' WHERE id = :id")
+    suspend fun updateWeightedAverage(id: String, average: Double): Int
 }

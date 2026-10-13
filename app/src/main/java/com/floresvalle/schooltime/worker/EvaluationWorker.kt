@@ -8,10 +8,6 @@ import com.floresvalle.schooltime.scheduler.AlarmScheduler
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import kotlinx.coroutines.flow.firstOrNull
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 
 class EvaluationWorker(
     private val context: Context,
@@ -19,30 +15,22 @@ class EvaluationWorker(
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
-        return try {
-            val db = AppDatabase.getDatabase(context)
-            val userId = Firebase.auth.currentUser?.uid ?: ""
+        val userId = Firebase.auth.currentUser?.uid ?: return Result.success()
+        val db = AppDatabase.getDatabase(context)
+        val scheduler = AlarmScheduler(context)
 
-            if (userId.isNotBlank()) {
-                val alarmScheduler = AlarmScheduler(context)
+        try {
+            val sessions = db.sessionDao().getAllActiveSessionsSync(userId)
+            sessions.forEach { scheduler.scheduleClassReminders(it) }
 
-                // 1. Scan Tasks
-                val tasks = db.evaluationDao().getAllActiveTasks(userId).firstOrNull() ?: emptyList()
-                tasks.filter { it.status != "Completado" }.forEach { task ->
-                    alarmScheduler.scheduleTaskReminders(task)
-                }
+            val tasks = db.evaluationDao().getTasks(userId).firstOrNull() ?: emptyList()
+            tasks.filter { it.status == "Pendiente" }.forEach { scheduler.scheduleTaskReminders(it) }
 
-                // 2. Scan Exams
-                val exams = db.evaluationDao().getAllActiveExams(userId).firstOrNull() ?: emptyList()
-                exams.filter { it.status != "Completado" }.forEach { exam ->
-                    alarmScheduler.scheduleExamReminders(exam)
-                }
-            }
-
-            Result.success()
+            val exams = db.evaluationDao().getExams(userId).firstOrNull() ?: emptyList()
+            exams.filter { it.status == "Pendiente" }.forEach { scheduler.scheduleExamReminders(it) }
         } catch (e: Exception) {
             e.printStackTrace()
-            Result.retry()
         }
+        return Result.success()
     }
 }
