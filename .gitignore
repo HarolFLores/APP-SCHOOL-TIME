@@ -10,3 +10,5 @@
 local.properties
 .build-outputs/
 app/build/
+*.keystore
+debug.keystore

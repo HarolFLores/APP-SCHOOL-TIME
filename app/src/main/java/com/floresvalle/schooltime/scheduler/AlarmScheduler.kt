@@ -11,47 +11,55 @@ import com.floresvalle.schooltime.data.entity.TaskEntity
 import com.floresvalle.schooltime.receiver.AlarmReceiver
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 class AlarmScheduler(private val context: Context) {
-    private val alarmManager: AlarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+    private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
     fun scheduleClassReminders(session: ClassSessionEntity) {
         try {
-            val sessionDate = LocalDate.parse(session.sessionDate, DateTimeFormatter.ISO_LOCAL_DATE)
-            val startTime = LocalTime.parse(session.startTime, DateTimeFormatter.ofPattern("HH:mm"))
-            val sessionDateTime = LocalDateTime.of(sessionDate, startTime)
+            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+            val startDateTime = LocalDateTime.parse("${session.sessionDate} ${session.startTime}", formatter)
             val zoneId = ZoneId.systemDefault()
 
-            val reminder2Hours = sessionDateTime.minusHours(2)
-            if (reminder2Hours.isAfter(LocalDateTime.now())) {
-                val epoch = reminder2Hours.atZone(zoneId).toInstant().toEpochMilli()
+            val isVirtual = session.modality.equals("Virtual", ignoreCase = true)
+            val locationText = if (isVirtual) {
+                "Modalidad Virtual"
+            } else {
+                session.locationRoom ?: "Aula por definir"
+            }
+
+            // Notice 1: 2 hours before
+            val time2h = startDateTime.minusHours(2)
+            if (time2h.isAfter(LocalDateTime.now())) {
+                val epoch2h = time2h.atZone(zoneId).toInstant().toEpochMilli()
                 scheduleSingleAlarm(
-                    epoch,
-                    "Clase en 2 horas: ${session.courseName}",
-                    "Tu clase inicia a las ${session.startTime}. Aula: ${session.locationRoom ?: "Virtual"}",
-                    session.virtualUrl,
-                    ("C2H_" + session.id).hashCode(),
-                    "Clases",
-                    session.userId,
-                    session.sessionDate
+                    triggerEpochMillis = epoch2h,
+                    title = "Clase próxima: ${session.courseName}",
+                    message = if (isVirtual) "Tu clase inicia a las ${session.startTime} (100% Virtual)" else "Inicia a las ${session.startTime} en $locationText",
+                    virtualUrl = null,
+                    notificationId = ("S2H_${session.id}").hashCode(),
+                    category = "Clases",
+                    userId = session.userId,
+                    eventDate = session.sessionDate
                 )
             }
 
-            val reminder15Min = sessionDateTime.minusMinutes(15)
-            if (reminder15Min.isAfter(LocalDateTime.now())) {
-                val epoch = reminder15Min.atZone(zoneId).toInstant().toEpochMilli()
+            // Notice 2: 15 minutes before
+            val time15m = startDateTime.minusMinutes(15)
+            if (time15m.isAfter(LocalDateTime.now())) {
+                val epoch15m = time15m.atZone(zoneId).toInstant().toEpochMilli()
                 scheduleSingleAlarm(
-                    epoch,
-                    "¡Clase en 15 minutos! ${session.courseName}",
-                    "Prepara tus materiales. Inicio: ${session.startTime}",
-                    session.virtualUrl,
-                    ("C15M_" + session.id).hashCode(),
-                    "Clases",
-                    session.userId,
-                    session.sessionDate
+                    triggerEpochMillis = epoch15m,
+                    title = "¡Tu clase de ${session.courseName} está por comenzar!",
+                    message = if (isVirtual) "Inicia en 15 minutos en modalidad virtual / online." else "Inicia en 15 minutos en $locationText.",
+                    virtualUrl = null,
+                    notificationId = ("S15M_${session.id}").hashCode(),
+                    category = "Clases",
+                    userId = session.userId,
+                    eventDate = session.sessionDate
                 )
             }
         } catch (e: Exception) {
@@ -61,36 +69,39 @@ class AlarmScheduler(private val context: Context) {
 
     fun scheduleTaskReminders(task: TaskEntity) {
         try {
-            val dueLocalDate = LocalDate.parse(task.dueDate, DateTimeFormatter.ISO_LOCAL_DATE)
+            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+            val dueLocalDate = LocalDate.parse(task.dueDate, formatter)
             val zoneId = ZoneId.systemDefault()
 
+            // 1. Preventive: 2 days before at 09:00 AM
             val date2Days = dueLocalDate.minusDays(2).atTime(9, 0)
             if (date2Days.isAfter(LocalDateTime.now())) {
-                val epoch = date2Days.atZone(zoneId).toInstant().toEpochMilli()
+                val epoch2Days = date2Days.atZone(zoneId).toInstant().toEpochMilli()
                 scheduleSingleAlarm(
-                    epoch,
-                    "Entrega Próxima: ${task.courseName}",
-                    "Tienes pendiente la entrega de \"${task.title}\" en 2 días (${task.dueDate}).",
-                    task.link,
-                    ("T2D_" + task.id).hashCode(),
-                    "Tareas",
-                    task.userId,
-                    task.dueDate
+                    triggerEpochMillis = epoch2Days,
+                    title = "Entrega Próxima: ${task.courseName}",
+                    message = "Tienes pendiente la entrega de ${task.title} en 2 días",
+                    virtualUrl = task.link,
+                    notificationId = ("T2D_${task.id}").hashCode(),
+                    category = "Tareas",
+                    userId = task.userId,
+                    eventDate = task.dueDate
                 )
             }
 
+            // 2. Urgent: 1 day before at 08:00 PM
             val date1Day = dueLocalDate.minusDays(1).atTime(20, 0)
             if (date1Day.isAfter(LocalDateTime.now())) {
-                val epoch = date1Day.atZone(zoneId).toInstant().toEpochMilli()
+                val epoch1Day = date1Day.atZone(zoneId).toInstant().toEpochMilli()
                 scheduleSingleAlarm(
-                    epoch,
-                    "¡Atención! Tarea Próxima a Vencer",
-                    "Mañana vence la tarea \"${task.title}\" de ${task.courseName}.",
-                    task.link,
-                    ("T1D_" + task.id).hashCode(),
-                    "Tareas",
-                    task.userId,
-                    task.dueDate
+                    triggerEpochMillis = epoch1Day,
+                    title = "¡Atención! Tarea Próxima a Vencer",
+                    message = "Mañana vence la tarea ${task.title} de ${task.courseName}",
+                    virtualUrl = task.link,
+                    notificationId = ("T1D_${task.id}").hashCode(),
+                    category = "Tareas",
+                    userId = task.userId,
+                    eventDate = task.dueDate
                 )
             }
         } catch (e: Exception) {
@@ -100,36 +111,41 @@ class AlarmScheduler(private val context: Context) {
 
     fun scheduleExamReminders(exam: ExamEntity) {
         try {
-            val examLocalDate = LocalDate.parse(exam.examDate, DateTimeFormatter.ISO_LOCAL_DATE)
+            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+            val examLocalDate = LocalDate.parse(exam.examDate, formatter)
             val zoneId = ZoneId.systemDefault()
 
+            val locationInfo = exam.location ?: "Ubicación por definir"
+
+            // 1. Preventive: 3 days before at 09:00 AM
             val date3Days = examLocalDate.minusDays(3).atTime(9, 0)
             if (date3Days.isAfter(LocalDateTime.now())) {
-                val epoch = date3Days.atZone(zoneId).toInstant().toEpochMilli()
+                val epoch3Days = date3Days.atZone(zoneId).toInstant().toEpochMilli()
                 scheduleSingleAlarm(
-                    epoch,
-                    "Examen en 3 días: ${exam.courseName}",
-                    "Repasa los temas para el ${exam.type} (${exam.examDate} a las ${exam.examTime}).",
-                    null,
-                    ("E3D_" + exam.id).hashCode(),
-                    "Exámenes",
-                    exam.userId,
-                    exam.examDate
+                    triggerEpochMillis = epoch3Days,
+                    title = "Examen Próximo: ${exam.courseName}",
+                    message = "Examen próximo: ${exam.type} de ${exam.courseName} programado para el ${exam.examDate}",
+                    virtualUrl = if (exam.modality.equals("Virtual", true)) exam.location else null,
+                    notificationId = ("E3D_${exam.id}").hashCode(),
+                    category = "Exámenes",
+                    userId = exam.userId,
+                    eventDate = exam.examDate
                 )
             }
 
-            val date1Day = examLocalDate.minusDays(1).atTime(18, 0)
+            // 2. Final: 1 day before at 08:00 PM
+            val date1Day = examLocalDate.minusDays(1).atTime(20, 0)
             if (date1Day.isAfter(LocalDateTime.now())) {
-                val epoch = date1Day.atZone(zoneId).toInstant().toEpochMilli()
+                val epoch1Day = date1Day.atZone(zoneId).toInstant().toEpochMilli()
                 scheduleSingleAlarm(
-                    epoch,
-                    "¡Mañana es tu evaluación! ${exam.courseName}",
-                    "Hora: ${exam.examTime}. Lugar: ${exam.location ?: "Aula asignada"}",
-                    null,
-                    ("E1D_" + exam.id).hashCode(),
-                    "Exámenes",
-                    exam.userId,
-                    exam.examDate
+                    triggerEpochMillis = epoch1Day,
+                    title = "¡Mañana tienes examen!",
+                    message = "Mañana tienes examen de ${exam.courseName} (${exam.type}) en $locationInfo",
+                    virtualUrl = if (exam.modality.equals("Virtual", true)) exam.location else null,
+                    notificationId = ("E1D_${exam.id}").hashCode(),
+                    category = "Exámenes",
+                    userId = exam.userId,
+                    eventDate = exam.examDate
                 )
             }
         } catch (e: Exception) {
@@ -156,20 +172,24 @@ class AlarmScheduler(private val context: Context) {
             putExtra(AlarmReceiver.EXTRA_USER_ID, userId)
             putExtra(AlarmReceiver.EXTRA_EVENT_DATE, eventDate)
         }
+
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             notificationId,
             intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        if (Build.VERSION.SDK_INT >= 31) {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (alarmManager.canScheduleExactAlarms()) {
                 alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerEpochMillis, pendingIntent)
             } else {
                 alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerEpochMillis, pendingIntent)
             }
-        } else {
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerEpochMillis, pendingIntent)
+        } else {
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerEpochMillis, pendingIntent)
         }
     }
 }

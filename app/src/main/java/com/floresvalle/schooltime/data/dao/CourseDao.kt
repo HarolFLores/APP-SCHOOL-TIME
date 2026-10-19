@@ -20,4 +20,16 @@ interface CourseDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertCourses(courses: List<CourseEntity>): List<Long>
+
+    @Query("UPDATE courses SET isDeleted = 1, updatedAt = :timestamp WHERE name = :name AND userId = :userId")
+    suspend fun softDeleteCourseByName(name: String, userId: String, timestamp: Long = System.currentTimeMillis()): Int
+
+    @Query("UPDATE courses SET isDeleted = 1, updatedAt = :timestamp WHERE id = :courseId")
+    suspend fun softDeleteCourse(courseId: String, timestamp: Long = System.currentTimeMillis()): Int
+
+    @Query("UPDATE courses SET name = :newName, teacherName = :teacherName, updatedAt = :timestamp WHERE id = :courseId")
+    suspend fun updateCourseDetails(courseId: String, newName: String, teacherName: String?, timestamp: Long = System.currentTimeMillis()): Int
+
+    @Query("DELETE FROM courses WHERE name = :name AND userId = :userId")
+    suspend fun hardDeleteCourseByName(name: String, userId: String): Int
 }
