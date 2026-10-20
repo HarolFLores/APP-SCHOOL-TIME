@@ -12,3 +12,7 @@ local.properties
 app/build/
 *.keystore
 debug.keystore
+debug.keystore.base64
+.kotlin/
+*.bundle
+*.patch

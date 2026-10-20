@@ -41,4 +41,7 @@ interface UserDao {
 
     @Query("UPDATE users SET weightedAverage = :avg, syncState = 'PENDING_UPLOAD' WHERE id = :userId")
     suspend fun updateWeightedAverage(userId: String, avg: Double): Int
+
+    @Query("UPDATE users SET firstName = :firstName, lastName = :lastName, career = :career, syncState = 'PENDING_UPLOAD' WHERE id = :userId")
+    suspend fun updateNameAndCareer(userId: String, firstName: String, lastName: String, career: String): Int
 }

@@ -106,6 +106,25 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun resetPassword(email: String, onResult: (isSuccess: Boolean, message: String) -> Unit) {
+        val normalized = AuthValidation.normalizeEmail(email)
+        val err = AuthValidation.emailError(normalized)
+        if (err != null) {
+            onResult(false, err)
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                Firebase.auth.sendPasswordResetEmail(normalized).await()
+                onResult(true, "Se ha enviado un enlace de restablecimiento a $normalized. Revisa tu bandeja de entrada o spam.")
+            } catch (e: Exception) {
+                val mapped = AuthValidation.mapFirebaseAuthError(e)
+                onResult(false, mapped)
+            }
+        }
+    }
+
     fun loginWithGoogle(
         context: Context,
         rememberMe: Boolean,

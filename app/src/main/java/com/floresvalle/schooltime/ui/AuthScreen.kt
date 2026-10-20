@@ -49,6 +49,13 @@ fun AuthScreen(
     var passwordError by remember { mutableStateOf<String?>(null) }
     var attemptedSubmit by remember { mutableStateOf(false) }
 
+    // Forgot Password Dialog States
+    var showForgotPasswordDialog by remember { mutableStateOf(false) }
+    var forgotEmail by remember { mutableStateOf("") }
+    var forgotEmailError by remember { mutableStateOf<String?>(null) }
+    var isSendingReset by remember { mutableStateOf(false) }
+    var resetSentSuccess by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
     val authState by viewModel.authState.collectAsState()
     val isEmailLoading = authState is AuthViewModel.AuthState.Loading && (authState as AuthViewModel.AuthState.Loading).mode == AuthViewModel.AuthMode.EMAIL
@@ -291,19 +298,25 @@ fun AuthScreen(
                             Text("Recordar sesión", style = MaterialTheme.typography.bodyMedium)
                         }
 
-                        Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceVariant) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF2E7D32)))
-                                Text("Red Campus OK", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
-                            }
+                        TextButton(
+                            onClick = {
+                                forgotEmail = email.trim()
+                                forgotEmailError = null
+                                resetSentSuccess = false
+                                showForgotPasswordDialog = true
+                            },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "¿Olvidaste tu contraseña?",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     Button(
                         onClick = { submitLogin() },
@@ -403,52 +416,187 @@ fun AuthScreen(
                     Text("Ver introducción y guía", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("•", color = MaterialTheme.colorScheme.outlineVariant)
-                Spacer(modifier = Modifier.width(8.dp))
-
-                var showClearRoomConfirmDialog by remember { mutableStateOf(false) }
-
-                TextButton(
-                    onClick = { showClearRoomConfirmDialog = true },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
-                ) {
-                    Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Limpiar Room", style = MaterialTheme.typography.labelSmall)
-                }
-
-                if (showClearRoomConfirmDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showClearRoomConfirmDialog = false },
-                        icon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                        title = { Text("¿Borrar datos en Room?", fontWeight = FontWeight.Bold) },
-                        text = {
-                            Text("Esta acción eliminará todos los registros de usuarios, periodos y cursos almacenados localmente en la base de datos Room del dispositivo.")
-                        },
-                        confirmButton = {
-                            Button(
-                                onClick = {
-                                    showClearRoomConfirmDialog = false
-                                    viewModel.clearRoomData {
-                                        Toast.makeText(context, "Base de datos Room limpiada exitosamente.", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                            ) {
-                                Text("Borrar Datos de Room")
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showClearRoomConfirmDialog = false }) {
-                                Text("Cancelar")
-                            }
-                        }
-                    )
-                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+
+    // Modal: Recuperar Contraseña ("¿Olvidaste tu contraseña?")
+    if (showForgotPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isSendingReset) showForgotPasswordDialog = false
+            },
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (resetSentSuccess) Color(0xFF2E7D32).copy(alpha = 0.12f)
+                            else MaterialTheme.colorScheme.primaryContainer
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (resetSentSuccess) Icons.Default.CheckCircle else Icons.Default.LockReset,
+                        contentDescription = null,
+                        tint = if (resetSentSuccess) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
+            },
+            title = {
+                Text(
+                    text = if (resetSentSuccess) "¡Enlace Enviado!" else "¿Olvidaste tu contraseña?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (!resetSentSuccess) {
+                        Text(
+                            text = "Ingresa el correo electrónico asociado a tu cuenta universitaria. Te enviaremos un enlace oficial para que puedas restablecer y crear una nueva contraseña de forma segura.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        OutlinedTextField(
+                            value = forgotEmail,
+                            onValueChange = {
+                                forgotEmail = it.trim()
+                                forgotEmailError = null
+                            },
+                            placeholder = { Text("ejemplo@gmail.com") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.AlternateEmail,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = if (forgotEmailError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            singleLine = true,
+                            isError = forgotEmailError != null,
+                            supportingText = forgotEmailError?.let { { Text(it) } },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = {
+                                val err = AuthValidation.emailError(forgotEmail)
+                                if (err != null) {
+                                    forgotEmailError = err
+                                } else {
+                                    isSendingReset = true
+                                    viewModel.resetPassword(forgotEmail) { success, message ->
+                                        isSendingReset = false
+                                        if (success) {
+                                            resetSentSuccess = true
+                                        } else {
+                                            forgotEmailError = message
+                                        }
+                                    }
+                                }
+                            }),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Surface(
+                            color = Color(0xFF2E7D32).copy(alpha = 0.08f),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = forgotEmail,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF2E7D32),
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Hemos enviado las instrucciones a tu correo. Ábrelo y haz clic en el enlace para asignar tu nueva contraseña.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Nota: Si no lo encuentras en tu bandeja principal, revisa la carpeta de Spam o Correo no deseado.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (!resetSentSuccess) {
+                    Button(
+                        onClick = {
+                            val err = AuthValidation.emailError(forgotEmail)
+                            if (err != null) {
+                                forgotEmailError = err
+                                return@Button
+                            }
+                            isSendingReset = true
+                            viewModel.resetPassword(forgotEmail) { success, message ->
+                                isSendingReset = false
+                                if (success) {
+                                    resetSentSuccess = true
+                                } else {
+                                    forgotEmailError = message
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isSendingReset && forgotEmail.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        if (isSendingReset) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Enviando...", fontWeight = FontWeight.Bold)
+                        } else {
+                            Text("Enviar enlace de verificación", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    Button(
+                        onClick = { showForgotPasswordDialog = false },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Volver al inicio de sesión", fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            dismissButton = {
+                if (!resetSentSuccess) {
+                    TextButton(
+                        onClick = { showForgotPasswordDialog = false },
+                        enabled = !isSendingReset
+                    ) {
+                        Text("Cancelar")
+                    }
+                }
+            },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     }
 }

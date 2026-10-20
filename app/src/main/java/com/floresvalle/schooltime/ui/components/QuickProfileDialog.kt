@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.floresvalle.schooltime.ui.theme.ThemePreference
@@ -29,13 +30,16 @@ fun QuickProfileDialog(
     onDismiss: () -> Unit,
     onNavigateToProfile: () -> Unit,
     onLogout: () -> Unit,
-    cycleName: String = "1er Ciclo"
+    cycleName: String = "1er Ciclo",
+    userName: String? = null,
+    userEmail: String? = null,
+    photoUri: String? = null
 ) {
     val context = LocalContext.current
     val isDarkMode = ThemePreference.isDarkModeState.value == "DARK"
     val currentUser = Firebase.auth.currentUser
-    val userName = currentUser?.displayName ?: "Estudiante"
-    val userEmail = currentUser?.email ?: "correo@uni.edu.pe"
+    val finalUserName = userName ?: currentUser?.displayName ?: "Estudiante"
+    val finalUserEmail = userEmail ?: currentUser?.email ?: "correo@uni.edu.pe"
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -59,15 +63,12 @@ fun QuickProfileDialog(
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Box(contentAlignment = Alignment.BottomEnd) {
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(32.dp))
-                            }
+                            UserAvatar(
+                                photoUri = photoUri,
+                                name = finalUserName,
+                                size = 56.dp,
+                                fontSize = 22.sp
+                            )
                             Box(
                                 modifier = Modifier
                                     .size(14.dp)
@@ -80,8 +81,8 @@ fun QuickProfileDialog(
                         }
 
                         Column {
-                            Text(userName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                            Text(userEmail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(finalUserName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text(finalUserEmail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(modifier = Modifier.height(6.dp))
                             Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) {
                                 Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {

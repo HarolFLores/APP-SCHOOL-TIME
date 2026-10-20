@@ -240,7 +240,10 @@ fun SchoolTimeApp(viewModel: SessionViewModel) {
                         popUpTo(Screen.Home.route) { inclusive = true }
                     }
                 },
-                cycleName = userData?.currentCycle ?: "1er Ciclo"
+                cycleName = userData?.currentCycle ?: "1er Ciclo",
+                userName = userData?.let { "${it.firstName} ${it.lastName}".trim() }?.ifBlank { null },
+                userEmail = userData?.email,
+                photoUri = userData?.photoUri
             )
         }
     }

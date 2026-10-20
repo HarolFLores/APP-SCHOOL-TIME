@@ -2,7 +2,10 @@ package com.floresvalle.schooltime.ui
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -30,11 +33,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.floresvalle.schooltime.ui.components.UserAvatar
 import com.floresvalle.schooltime.util.AuthValidation
 import com.floresvalle.schooltime.viewmodel.RegisterViewModel
 import com.google.firebase.Firebase
@@ -51,9 +56,16 @@ fun RegisterScreen(
     onNavigateBack: () -> Unit,
     onRegisterSuccess: () -> Unit
 ) {
+    // Current Step in the 3-step registration wizard
+    var currentStep by remember { mutableIntStateOf(1) }
+
     BackHandler {
-        viewModel.cancelRegistration()
-        onNavigateBack()
+        if (currentStep > 1) {
+            currentStep--
+        } else {
+            viewModel.cancelRegistration()
+            onNavigateBack()
+        }
     }
 
     val currentGoogleUser = try { Firebase.auth.currentUser } catch (_: Exception) { null }
@@ -108,7 +120,10 @@ fun RegisterScreen(
     var acceptTerms by remember { mutableStateOf(false) }
 
     var selectedCycle by remember { mutableStateOf("1er Ciclo") }
-    var attemptedSubmit by remember { mutableStateOf(false) }
+    var attemptedSubmitStep1 by remember { mutableStateOf(false) }
+    var attemptedSubmitStep2 by remember { mutableStateOf(false) }
+    var attemptedSubmitStep3 by remember { mutableStateOf(false) }
+
     var firstNameError by remember { mutableStateOf<String?>(null) }
     var lastNameError by remember { mutableStateOf<String?>(null) }
     var emailFieldError by remember { mutableStateOf<String?>(null) }
@@ -194,22 +209,46 @@ fun RegisterScreen(
         else -> "Mínimo 8 caracteres" to MaterialTheme.colorScheme.onSurfaceVariant
     }
 
-    fun validateRegisterFields(): Boolean {
+    // Completion checks per step to disable/dim the "Continuar" button until all fields are filled
+    val isStep1Complete = firstName.trim().isNotBlank() &&
+            lastName.trim().isNotBlank() &&
+            phone.filter { it.isDigit() }.length == selectedCountry.expectedLength
+
+    val isStep2Complete = effectiveCareer().isNotBlank() &&
+            semester.trim().length >= 6 &&
+            (semester.endsWith("-I") || semester.endsWith("-II")) &&
+            startDate.isNotBlank() &&
+            endDate.isNotBlank() &&
+            selectedCycle.isNotBlank()
+
+    val isStep3Complete = email.trim().isNotBlank() &&
+            email.contains("@") &&
+            email.contains(".") &&
+            (isGoogleSignUp || (password.length >= 8 && confirmPassword.isNotEmpty() && confirmPassword == password)) &&
+            acceptTerms
+
+    // Validation functions per step
+    fun validateStep1(): Boolean {
         firstNameError = AuthValidation.requiredNameError(firstName, "nombres")
         lastNameError = AuthValidation.requiredNameError(lastName, "apellidos")
-        emailFieldError = if (isGoogleSignUp) null else AuthValidation.emailError(email)
         phoneError = AuthValidation.phoneError(phone, selectedCountry.expectedLength, selectedCountry.dialCode)
+        return firstNameError == null && lastNameError == null && phoneError == null
+    }
+
+    fun validateStep2(): Boolean {
         careerError = AuthValidation.careerError(effectiveCareer())
         semesterError = AuthValidation.semesterError(semester)
         startDateError = AuthValidation.startDateError(startDate)
         endDateError = AuthValidation.endDateError(startDate, endDate)
+        return careerError == null && semesterError == null && startDateError == null && endDateError == null
+    }
+
+    fun validateStep3(): Boolean {
+        emailFieldError = if (isGoogleSignUp) null else AuthValidation.emailError(email)
         passwordFieldError = if (isGoogleSignUp) null else AuthValidation.passwordError(password)
         confirmPasswordError = if (isGoogleSignUp) null else AuthValidation.confirmPasswordError(password, confirmPassword)
         termsError = if (!acceptTerms) "Debes aceptar los términos para continuar." else null
-        return listOf(
-            firstNameError, lastNameError, emailFieldError, phoneError, careerError,
-            semesterError, startDateError, endDateError, passwordFieldError, confirmPasswordError, termsError
-        ).all { it == null }
+        return emailFieldError == null && passwordFieldError == null && confirmPasswordError == null && termsError == null
     }
 
     // Modal 1: Confirmación de Correo Electrónico Correcto (Antes de enviar enlace)
@@ -280,7 +319,7 @@ fun RegisterScreen(
         )
     }
 
-    // Modal 2: Hemos enviado un enlace de verificación (Elegante, sin solapamientos ni distorsión)
+    // Modal 2: Hemos enviado un enlace de verificación (Elegante, sin distorsión)
     if (uiState is RegisterViewModel.RegisterUiState.AwaitingVerification) {
         Dialog(
             onDismissRequest = {},
@@ -504,7 +543,7 @@ fun RegisterScreen(
         }
     }
 
-    // Modal Selector de Código de País (Experiencia Élite)
+    // Modal Selector de Código de País
     if (showCountryDialog) {
         var searchQuery by remember { mutableStateOf("") }
         val filteredCountries = remember(searchQuery) {
@@ -592,14 +631,31 @@ fun RegisterScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text(if (isGoogleSignUp) "Completar Registro con Google" else "Crear Cuenta", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                        Text("SchoolTime Universitario", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = if (isGoogleSignUp) "Registro con Google" else "Crear Cuenta",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Paso $currentStep de 3 • " + when (currentStep) {
+                                1 -> "Datos Personales"
+                                2 -> "Información Académica"
+                                else -> "Seguridad y Acceso"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = {
-                        viewModel.cancelRegistration()
-                        onNavigateBack()
+                        if (currentStep > 1) {
+                            currentStep--
+                        } else {
+                            viewModel.cancelRegistration()
+                            onNavigateBack()
+                        }
                     }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
@@ -613,620 +669,886 @@ fun RegisterScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 8.dp)
+                .padding(horizontal = 20.dp, vertical = 8.dp)
         ) {
-            // Header
-            Row(verticalAlignment = Alignment.Top) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.School,
-                        contentDescription = "Logo",
-                        modifier = Modifier.size(32.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(Icons.Default.Verified, contentDescription = null, modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Text(if (isGoogleSignUp) "Onboarding Google" else "Nuevo Ingreso", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(text = if (isGoogleSignUp) "Completa tu Perfil" else "Únete a SchoolTime", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (isGoogleSignUp) "Tu cuenta de Google fue verificada. Puedes editar tus nombres y completar tu carrera y fechas de ciclo." else "Configura tu perfil institucional para automatizar tus horarios y ciclo académico.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Form Fields: Nombres & Apellidos (Bloqueo absoluto de números)
-            Text("Nombres:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
-            OutlinedTextField(
-                value = firstName,
-                onValueChange = {
-                    firstName = AuthValidation.filterNameInput(it)
-                    if (attemptedSubmit) {
-                        firstNameError = AuthValidation.requiredNameError(firstName, "nombres")
-                    }
-                },
-                placeholder = { Text("Nombres:") },
-                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                singleLine = true,
-                isError = attemptedSubmit && firstNameError != null,
-                supportingText = if (attemptedSubmit) firstNameError?.let { { Text(it) } } else null,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text("Apellidos:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
-            OutlinedTextField(
-                value = lastName,
-                onValueChange = {
-                    lastName = AuthValidation.filterNameInput(it)
-                    if (attemptedSubmit) {
-                        lastNameError = AuthValidation.requiredNameError(lastName, "apellidos")
-                    }
-                },
-                placeholder = { Text("Apellidos") },
-                leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                singleLine = true,
-                isError = attemptedSubmit && lastNameError != null,
-                supportingText = if (attemptedSubmit) lastNameError?.let { { Text(it) } } else null,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Email (LOCKED for Google, editable for Email sign up)
-            Text("Correo Electrónico:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
-            OutlinedTextField(
-                value = email,
-                onValueChange = {
-                    if (!isGoogleSignUp) {
-                        email = it.trim()
-                        if (attemptedSubmit) {
-                            emailFieldError = AuthValidation.emailError(email)
-                        }
-                    }
-                },
-                readOnly = isGoogleSignUp,
-                enabled = !isGoogleSignUp,
-                isError = attemptedSubmit && emailFieldError != null,
-                supportingText = if (attemptedSubmit && emailFieldError != null) {
-                    { Text(emailFieldError ?: "") }
-                } else if (isGoogleSignUp) {
-                    { Text("Verificado con Google (no modificable)") }
-                } else {
-                    { Text("Debe incluir '@' y dominio completo.") }
-                },
-                placeholder = { Text("ejemplo@gmail.com") },
-                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Teléfono Celular con Código de País (Solo números, longitud controlada)
-            Text("Teléfono celular:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
-            OutlinedTextField(
-                value = phone,
-                onValueChange = { input ->
-                    phone = input.filter { it.isDigit() }.take(selectedCountry.expectedLength)
-                    if (attemptedSubmit) {
-                        phoneError = AuthValidation.phoneError(phone, selectedCountry.expectedLength, selectedCountry.dialCode)
-                    }
-                },
-                placeholder = { Text(selectedCountry.placeholder) },
-                leadingIcon = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clickable { showCountryDialog = true }
-                            .padding(start = 12.dp, end = 6.dp)
-                    ) {
-                        Text(selectedCountry.flag, style = MaterialTheme.typography.titleMedium)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(selectedCountry.dialCode, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Elegir país", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Box(modifier = Modifier.height(20.dp).width(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
-                    }
-                },
-                singleLine = true,
-                isError = attemptedSubmit && phoneError != null,
-                supportingText = if (attemptedSubmit && phoneError != null) {
-                    { Text(phoneError ?: "") }
-                } else {
-                    { Text("${selectedCountry.name} (${selectedCountry.dialCode}): ${phone.length}/${selectedCountry.expectedLength} dígitos") }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Carrera Profesional: Dropdown Select con "Otra (Especificar)"
-            Text("Carrera Profesional:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
-            ExposedDropdownMenuBox(
-                expanded = careerExpanded,
-                onExpandedChange = { careerExpanded = !careerExpanded },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = selectedCareer,
-                    onValueChange = {},
-                    readOnly = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = careerExpanded) },
-                    leadingIcon = { Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                ExposedDropdownMenu(
-                    expanded = careerExpanded,
-                    onDismissRequest = { careerExpanded = false }
-                ) {
-                    AuthValidation.PREDEFINED_CAREERS.forEach { careerItem ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = careerItem,
-                                    fontWeight = if (careerItem == selectedCareer) FontWeight.Bold else FontWeight.Normal
-                                )
-                            },
-                            onClick = {
-                                selectedCareer = careerItem
-                                careerExpanded = false
-                                if (attemptedSubmit) {
-                                    careerError = AuthValidation.careerError(effectiveCareer())
-                                }
-                            }
-                        )
+            // Modern Step Timeline Component
+            RegistrationTimeline(
+                currentStep = currentStep,
+                onStepClick = { targetStep ->
+                    // Permite retroceder a un paso anterior ya visitado
+                    if (targetStep < currentStep) {
+                        currentStep = targetStep
+                    } else if (targetStep == 2 && currentStep == 1 && isStep1Complete) {
+                        attemptedSubmitStep1 = true
+                        if (validateStep1()) currentStep = 2
+                    } else if (targetStep == 3 && currentStep == 2 && isStep2Complete) {
+                        attemptedSubmitStep2 = true
+                        if (validateStep2()) currentStep = 3
                     }
                 }
-            }
+            )
 
-            if (selectedCareer.startsWith("Otra", ignoreCase = true)) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Text("Escribe tu carrera profesional:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF006C88))
-                Spacer(modifier = Modifier.height(4.dp))
-                OutlinedTextField(
-                    value = customCareer,
-                    onValueChange = {
-                        customCareer = AuthValidation.filterNameInput(it)
-                        if (attemptedSubmit) {
-                            careerError = AuthValidation.careerError(customCareer)
-                        }
-                    },
-                    placeholder = { Text("Carrera Profesional") },
-                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                    singleLine = true,
-                    isError = attemptedSubmit && careerError != null,
-                    supportingText = if (attemptedSubmit) careerError?.let { { Text(it) } } else null,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-            }
+            Spacer(modifier = Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Academic Period Section Card
-            ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text("Periodo Académico (Ciclo)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text("Semestre Académico:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    OutlinedTextField(
-                        value = semester,
-                        onValueChange = { input ->
-                            semester = AuthValidation.formatSemesterInput(semester, input)
-                            if (attemptedSubmit) {
-                                semesterError = AuthValidation.semesterError(semester)
-                            }
-                            // Si se completa el semestre (ej. 2026-I o 2026-II) y las fechas están vacías, autocompletar 16 semanas exactas
-                            val now = java.time.LocalDate.now()
-                            val typedYear = semester.take(4).toIntOrNull() ?: now.year
-                            if (semester.endsWith("-I")) {
-                                val targetYear = if (now.monthValue >= 8 && typedYear <= now.year) now.year + 1 else typedYear
-                                startDate = "$targetYear-03-16"
-                                endDate = "$targetYear-07-06" // 16 semanas exactas
-                                if (attemptedSubmit) {
-                                    startDateError = null
-                                    endDateError = null
-                                }
-                            } else if (semester.endsWith("-II")) {
-                                startDate = "$typedYear-09-07"
-                                endDate = "$typedYear-12-28" // 16 semanas fijas exactas (28 Dic)
-                                if (attemptedSubmit) {
-                                    startDateError = null
-                                    endDateError = null
-                                }
-                            }
-                        },
-                        placeholder = { Text("0000-II") },
-                        singleLine = true,
-                        isError = attemptedSubmit && semesterError != null,
-                        supportingText = if (attemptedSubmit && semesterError != null) {
-                            { Text(semesterError ?: "") }
-                        } else {
-                            { Text("Escribe los 4 dígitos del año") }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text("Ciclo de Estudios", style = MaterialTheme.typography.labelMedium)
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    val cycles = listOf("1er Ciclo", "2do Ciclo", "3er Ciclo", "4to Ciclo", "5to Ciclo", "6to Ciclo", "7mo Ciclo", "8vo Ciclo", "9no Ciclo", "10mo Ciclo")
-                    Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        cycles.forEach { c ->
-                            val isSelected = selectedCycle == c
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = if (isSelected) Color(0xFF006C88) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                onClick = { selectedCycle = c }
+            // Step Content Animated
+            AnimatedContent(
+                targetState = currentStep,
+                label = "RegistrationStepAnimation"
+            ) { step ->
+                when (step) {
+                    1 -> {
+                        // ==================== PASO 1: DATOS PERSONALES ====================
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            // Section Header Card
+                            ElevatedCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
                             ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(MaterialTheme.colorScheme.primaryContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Person,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = if (isGoogleSignUp) "Verifica tu Identidad" else "¿Cómo te llamas?",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Ingresa tus nombres completos y número de teléfono celular.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Field: Nombres
+                            Text("Nombres:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            OutlinedTextField(
+                                value = firstName,
+                                onValueChange = {
+                                    firstName = AuthValidation.filterNameInput(it)
+                                    if (attemptedSubmitStep1) {
+                                        firstNameError = AuthValidation.requiredNameError(firstName, "nombres")
+                                    }
+                                },
+                                placeholder = { Text("Ej. Carlos Alberto") },
+                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                singleLine = true,
+                                isError = attemptedSubmitStep1 && firstNameError != null,
+                                supportingText = if (attemptedSubmitStep1 && firstNameError != null) { { Text(firstNameError ?: "") } } else null,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Field: Apellidos
+                            Text("Apellidos:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            OutlinedTextField(
+                                value = lastName,
+                                onValueChange = {
+                                    lastName = AuthValidation.filterNameInput(it)
+                                    if (attemptedSubmitStep1) {
+                                        lastNameError = AuthValidation.requiredNameError(lastName, "apellidos")
+                                    }
+                                },
+                                placeholder = { Text("Ej. Flores Valle") },
+                                leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                singleLine = true,
+                                isError = attemptedSubmitStep1 && lastNameError != null,
+                                supportingText = if (attemptedSubmitStep1 && lastNameError != null) { { Text(lastNameError ?: "") } } else null,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Field: Teléfono Celular con Código de País
+                            Text("Teléfono Celular:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            OutlinedTextField(
+                                value = phone,
+                                onValueChange = { input ->
+                                    phone = input.filter { it.isDigit() }.take(selectedCountry.expectedLength)
+                                    if (attemptedSubmitStep1) {
+                                        phoneError = AuthValidation.phoneError(phone, selectedCountry.expectedLength, selectedCountry.dialCode)
+                                    }
+                                },
+                                placeholder = { Text(selectedCountry.placeholder) },
+                                leadingIcon = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .clickable { showCountryDialog = true }
+                                            .padding(start = 12.dp, end = 6.dp)
+                                    ) {
+                                        Text(selectedCountry.flag, style = MaterialTheme.typography.titleMedium)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(selectedCountry.dialCode, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Elegir país", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Box(modifier = Modifier.height(20.dp).width(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
+                                    }
+                                },
+                                singleLine = true,
+                                isError = attemptedSubmitStep1 && phoneError != null,
+                                supportingText = if (attemptedSubmitStep1 && phoneError != null) {
+                                    { Text(phoneError ?: "") }
+                                } else {
+                                    { Text("${selectedCountry.name} (${selectedCountry.dialCode}): ${phone.length}/${selectedCountry.expectedLength} dígitos") }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
+
+                            Spacer(modifier = Modifier.height(32.dp))
+
+                            // Step 1 Action Button - Disabled & Darkened until all fields are complete
+                            Button(
+                                onClick = {
+                                    attemptedSubmitStep1 = true
+                                    if (validateStep1()) {
+                                        currentStep = 2
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                enabled = isStep1Complete,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                                )
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("Continuar a Información Académica", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
+                                }
+                            }
+
+                            if (!isStep1Complete) {
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = c,
-                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Bold,
+                                    text = "Completa tus nombres, apellidos y teléfono celular para continuar",
                                     style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                             }
+
+                            Spacer(modifier = Modifier.height(24.dp))
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text("Duración Académica", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        val now = remember { java.time.LocalDate.now() }
-                        val currentYear = now.year
-                        val nextYear = currentYear + 1
-
-                        AssistChip(
-                            onClick = {
-                                semester = "$currentYear-II"
-                                startDate = "$currentYear-09-07"
-                                endDate = "$nextYear-01-04" // 17 semanas con aplazados
-                                if (attemptedSubmit) {
-                                    semesterError = null
-                                    startDateError = null
-                                    endDateError = null
+                    2 -> {
+                        // ==================== PASO 2: INFORMACIÓN ACADÉMICA ====================
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            // Section Header Card
+                            ElevatedCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(MaterialTheme.colorScheme.primaryContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.School,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = "Información Universitaria",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Selecciona tu carrera, ciclo de estudios y fechas del semestre.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
-                            },
-                            label = { Text("Ciclo II: 07 Sep - 04 Ene (17 sem)") }
-                        )
-                        AssistChip(
-                            onClick = {
-                                semester = "$currentYear-II"
-                                startDate = "$currentYear-09-07"
-                                endDate = "$currentYear-12-28" // 16 semanas fijas
-                                if (attemptedSubmit) {
-                                    semesterError = null
-                                    startDateError = null
-                                    endDateError = null
-                                }
-                            },
-                            label = { Text("Ciclo II: 07 Sep - 28 Dic (16 sem)") }
-                        )
-                        AssistChip(
-                            onClick = {
-                                val targetYear = if (now.monthValue >= 8) nextYear else currentYear
-                                semester = "$targetYear-I"
-                                startDate = "$targetYear-03-16"
-                                endDate = "$targetYear-07-06" // 16 semanas fijas
-                                if (attemptedSubmit) {
-                                    semesterError = null
-                                    startDateError = null
-                                    endDateError = null
-                                }
-                            },
-                            label = { Text("Ciclo I: 16 Mar - 06 Jul (16 sem)") }
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // MANDATORY CYCLE START & END DATES (Clickable overlay + Error validation)
-                    Text("Fecha de Inicio del Ciclo:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = startDate,
-                            onValueChange = {},
-                            readOnly = true,
-                            isError = attemptedSubmit && startDateError != null,
-                            supportingText = if (attemptedSubmit) startDateError?.let { { Text(it) } } else null,
-                            placeholder = { Text("yy-MM-dd") },
-                            leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = "Inicio de ciclo", tint = Color(0xFF006C88)) },
-                            trailingIcon = {
-                                IconButton(onClick = { showStartDatePicker = true }) {
-                                    Icon(Icons.Default.DateRange, contentDescription = "Elegir fecha de inicio")
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                                disabledContainerColor = MaterialTheme.colorScheme.surface,
-                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                errorBorderColor = MaterialTheme.colorScheme.error
-                            )
-                        )
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .clickable { showStartDatePicker = true }
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text("Fecha de Fin del Ciclo:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = endDate,
-                            onValueChange = {},
-                            readOnly = true,
-                            isError = attemptedSubmit && endDateError != null,
-                            supportingText = if (attemptedSubmit) endDateError?.let { { Text(it) } } else null,
-                            placeholder = { Text("yy-MM-dd") },
-                            leadingIcon = { Icon(Icons.Default.Event, contentDescription = "Fin de ciclo", tint = Color(0xFF006C88)) },
-                            trailingIcon = {
-                                IconButton(onClick = { showEndDatePicker = true }) {
-                                    Icon(Icons.Default.DateRange, contentDescription = "Elegir fecha de fin")
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                                disabledContainerColor = MaterialTheme.colorScheme.surface,
-                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                errorBorderColor = MaterialTheme.colorScheme.error
-                            )
-                        )
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .clickable { showEndDatePicker = true }
-                        )
-                    }
-
-                    if (startDate.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            TextButton(onClick = {
-                                AuthValidation.parseDate(startDate)?.let {
-                                    endDate = it.plusWeeks(16).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
-                                    if (attemptedSubmit) endDateError = null
-                                }
-                            }) {
-                                Text("Ajustar a 16 semanas de clases", style = MaterialTheme.typography.labelSmall)
                             }
-                            TextButton(onClick = {
-                                AuthValidation.parseDate(startDate)?.let {
-                                    endDate = it.plusWeeks(17).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
-                                    if (attemptedSubmit) endDateError = null
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Carrera Profesional Dropdown
+                            Text("Carrera Profesional:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            ExposedDropdownMenuBox(
+                                expanded = careerExpanded,
+                                onExpandedChange = { careerExpanded = !careerExpanded },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedCareer,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = careerExpanded) },
+                                    leadingIcon = { Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = careerExpanded,
+                                    onDismissRequest = { careerExpanded = false }
+                                ) {
+                                    AuthValidation.PREDEFINED_CAREERS.forEach { careerItem ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = careerItem,
+                                                    fontWeight = if (careerItem == selectedCareer) FontWeight.Bold else FontWeight.Normal
+                                                )
+                                            },
+                                            onClick = {
+                                                selectedCareer = careerItem
+                                                careerExpanded = false
+                                                if (attemptedSubmitStep2) {
+                                                    careerError = AuthValidation.careerError(effectiveCareer())
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
-                            }) {
-                                Text("+ 1 sem. aplazados (17 sem)", style = MaterialTheme.typography.labelSmall)
                             }
-                        }
-                    }
-                }
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            if (!isGoogleSignUp) {
-                // Password Section (Includes Strength Meter & Eye Icon Toggle)
-                Text("Contraseña:", style = MaterialTheme.typography.labelMedium)
-                Spacer(modifier = Modifier.height(4.dp))
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    placeholder = { Text("••••••••••••") },
-                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                    trailingIcon = {
-                        val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
-                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                            Icon(imageVector = image, contentDescription = "Mostrar contraseña")
-                        }
-                    },
-                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Password Strength Bar
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    val filledColor = if (strengthLevel >= 1) strengthColor else MaterialTheme.colorScheme.outlineVariant
-                    Box(modifier = Modifier.weight(1f).height(4.dp).background(filledColor, RoundedCornerShape(50)))
-
-                    val filledColor2 = if (strengthLevel >= 2) strengthColor else MaterialTheme.colorScheme.outlineVariant
-                    Box(modifier = Modifier.weight(1f).height(4.dp).background(filledColor2, RoundedCornerShape(50)))
-
-                    val filledColor3 = if (strengthLevel >= 3) strengthColor else MaterialTheme.colorScheme.outlineVariant
-                    Box(modifier = Modifier.weight(1f).height(4.dp).background(filledColor3, RoundedCornerShape(50)))
-
-                    val filledColor4 = if (strengthLevel >= 4) strengthColor else MaterialTheme.colorScheme.outlineVariant
-                    Box(modifier = Modifier.weight(1f).height(4.dp).background(filledColor4, RoundedCornerShape(50)))
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (strengthLevel == 4) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(12.dp), tint = strengthColor)
-                            Spacer(modifier = Modifier.width(4.dp))
-                        } else if (strengthLevel in 1..3) {
-                            Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(12.dp), tint = strengthColor)
-                            Spacer(modifier = Modifier.width(4.dp))
-                        }
-                        Text(strengthText, style = MaterialTheme.typography.labelSmall, color = strengthColor)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                val isConfirmPasswordError = confirmPassword.isNotEmpty() && confirmPassword != password
-
-                Text("Confirmar Contraseña:", style = MaterialTheme.typography.labelMedium)
-                Spacer(modifier = Modifier.height(4.dp))
-                OutlinedTextField(
-                    value = confirmPassword,
-                    onValueChange = { confirmPassword = it },
-                    placeholder = { Text("••••••••••••") },
-                    leadingIcon = { Icon(Icons.Default.SettingsBackupRestore, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                    trailingIcon = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (confirmPassword.isNotEmpty() && confirmPassword == password) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Contraseñas coinciden",
-                                    tint = Color(0xFF2E7D32),
-                                    modifier = Modifier.size(20.dp)
+                            if (selectedCareer.startsWith("Otra", ignoreCase = true)) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text("Escribe tu carrera profesional:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                OutlinedTextField(
+                                    value = customCareer,
+                                    onValueChange = {
+                                        customCareer = AuthValidation.filterNameInput(it)
+                                        if (attemptedSubmitStep2) {
+                                            careerError = AuthValidation.careerError(customCareer)
+                                        }
+                                    },
+                                    placeholder = { Text("Carrera Profesional") },
+                                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                    singleLine = true,
+                                    isError = attemptedSubmitStep2 && careerError != null,
+                                    supportingText = if (attemptedSubmitStep2) careerError?.let { { Text(it) } } else null,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(14.dp)
                                 )
                             }
-                            val image = if (confirmPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
-                            IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
-                                Icon(imageVector = image, contentDescription = "Mostrar contraseña")
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Semestre Académico
+                            Text("Semestre Académico:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            OutlinedTextField(
+                                value = semester,
+                                onValueChange = { input ->
+                                    semester = AuthValidation.formatSemesterInput(semester, input)
+                                    if (attemptedSubmitStep2) {
+                                        semesterError = AuthValidation.semesterError(semester)
+                                    }
+                                    // Autocompletar 16 semanas si se define año y ciclo
+                                    val now = java.time.LocalDate.now()
+                                    val typedYear = semester.take(4).toIntOrNull() ?: now.year
+                                    if (semester.endsWith("-I")) {
+                                        val targetYear = if (now.monthValue >= 8 && typedYear <= now.year) now.year + 1 else typedYear
+                                        startDate = "$targetYear-03-16"
+                                        endDate = "$targetYear-07-06"
+                                        if (attemptedSubmitStep2) {
+                                            startDateError = null
+                                            endDateError = null
+                                        }
+                                    } else if (semester.endsWith("-II")) {
+                                        startDate = "$typedYear-09-07"
+                                        endDate = "$typedYear-12-28"
+                                        if (attemptedSubmitStep2) {
+                                            startDateError = null
+                                            endDateError = null
+                                        }
+                                    }
+                                },
+                                placeholder = { Text("0000-II") },
+                                leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                singleLine = true,
+                                isError = attemptedSubmitStep2 && semesterError != null,
+                                supportingText = if (attemptedSubmitStep2 && semesterError != null) {
+                                    { Text(semesterError ?: "") }
+                                } else {
+                                    { Text("Escribe los 4 dígitos del año (ej. 2026-I o 2026-II)") }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Ciclo de Estudios (Chips)
+                            Text("Ciclo de Estudios:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            val cycles = listOf("1er Ciclo", "2do Ciclo", "3er Ciclo", "4to Ciclo", "5to Ciclo", "6to Ciclo", "7mo Ciclo", "8vo Ciclo", "9no Ciclo", "10mo Ciclo")
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                cycles.forEach { c ->
+                                    val isSelected = selectedCycle == c
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                        onClick = { selectedCycle = c }
+                                    ) {
+                                        Text(
+                                            text = c,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                        )
+                                    }
+                                }
                             }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Duración Académica Quick Select
+                            Text("Accesos Rápidos de Calendario:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                val now = remember { java.time.LocalDate.now() }
+                                val currentYear = now.year
+                                val nextYear = currentYear + 1
+
+                                AssistChip(
+                                    onClick = {
+                                        semester = "$currentYear-II"
+                                        startDate = "$currentYear-09-07"
+                                        endDate = "$currentYear-12-28"
+                                        if (attemptedSubmitStep2) {
+                                            semesterError = null
+                                            startDateError = null
+                                            endDateError = null
+                                        }
+                                    },
+                                    label = { Text("Ciclo II: 07 Sep - 28 Dic (16 sem)") }
+                                )
+                                AssistChip(
+                                    onClick = {
+                                        val targetYear = if (now.monthValue >= 8) nextYear else currentYear
+                                        semester = "$targetYear-I"
+                                        startDate = "$targetYear-03-16"
+                                        endDate = "$targetYear-07-06"
+                                        if (attemptedSubmitStep2) {
+                                            semesterError = null
+                                            startDateError = null
+                                            endDateError = null
+                                        }
+                                    },
+                                    label = { Text("Ciclo I: 16 Mar - 06 Jul (16 sem)") }
+                                )
+                                AssistChip(
+                                    onClick = {
+                                        semester = "$currentYear-II"
+                                        startDate = "$currentYear-09-07"
+                                        endDate = "$nextYear-01-04"
+                                        if (attemptedSubmitStep2) {
+                                            semesterError = null
+                                            startDateError = null
+                                            endDateError = null
+                                        }
+                                    },
+                                    label = { Text("Ciclo II: 07 Sep - 04 Ene (+ aplazados)") }
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Fechas de Inicio y Fin
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                // Fecha Inicio
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Inicio de Ciclo:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        OutlinedTextField(
+                                            value = startDate,
+                                            onValueChange = {},
+                                            readOnly = true,
+                                            isError = attemptedSubmitStep2 && startDateError != null,
+                                            supportingText = if (attemptedSubmitStep2 && startDateError != null) { { Text(startDateError ?: "") } } else null,
+                                            placeholder = { Text("yy-MM-dd") },
+                                            leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(14.dp)
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .matchParentSize()
+                                                .clickable { showStartDatePicker = true }
+                                        )
+                                    }
+                                }
+
+                                // Fecha Fin
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Fin de Ciclo:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        OutlinedTextField(
+                                            value = endDate,
+                                            onValueChange = {},
+                                            readOnly = true,
+                                            isError = attemptedSubmitStep2 && endDateError != null,
+                                            supportingText = if (attemptedSubmitStep2 && endDateError != null) { { Text(endDateError ?: "") } } else null,
+                                            placeholder = { Text("yy-MM-dd") },
+                                            leadingIcon = { Icon(Icons.Default.Event, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(14.dp)
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .matchParentSize()
+                                                .clickable { showEndDatePicker = true }
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(32.dp))
+
+                            // Step 2 Action Buttons
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                OutlinedButton(
+                                    onClick = { currentStep = 1 },
+                                    modifier = Modifier.weight(0.7f).height(52.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.outlineVariant)
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Atrás", fontWeight = FontWeight.Bold)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        attemptedSubmitStep2 = true
+                                        if (validateStep2()) {
+                                            currentStep = 3
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1.3f).height(52.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    enabled = isStep2Complete,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                                    )
+                                ) {
+                                    Text("Continuar a Seguridad", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
+                                }
+                            }
+
+                            if (!isStep2Complete) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Completa tu carrera, semestre y fechas del ciclo para continuar",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(24.dp))
                         }
-                    },
-                    visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    isError = isConfirmPasswordError
-                )
-                if (isConfirmPasswordError) {
-                    Text(
-                        text = "Las contraseñas no coinciden",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                    )
-                }
+                    }
 
-                Spacer(modifier = Modifier.height(24.dp))
-            }
+                    3 -> {
+                        // ==================== PASO 3: CUENTA Y SEGURIDAD ====================
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            // Section Header Card
+                            ElevatedCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(MaterialTheme.colorScheme.primaryContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Security,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = if (isGoogleSignUp) "Acceso y Confirmación" else "Seguridad de tu Cuenta",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = if (isGoogleSignUp) "Tu cuenta de Google fue vinculada con éxito. Revisa el resumen y finaliza." else "Ingresa tu correo y contraseña para crear tu acceso institucional.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
 
-            Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(16.dp)) {
-                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
-                    Checkbox(
-                        checked = acceptTerms,
-                        onCheckedChange = { acceptTerms = it },
-                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Column {
-                        Text("Acepto Términos de Servicio y Sincronización", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                        Text("Cifrado de extremo a extremo y políticas de privacidad.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Correo Electrónico
+                            Text("Correo Electrónico:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            OutlinedTextField(
+                                value = email,
+                                onValueChange = {
+                                    if (!isGoogleSignUp) {
+                                        email = it.trim()
+                                        if (attemptedSubmitStep3) {
+                                            emailFieldError = AuthValidation.emailError(email)
+                                        }
+                                    }
+                                },
+                                readOnly = isGoogleSignUp,
+                                enabled = !isGoogleSignUp,
+                                isError = attemptedSubmitStep3 && emailFieldError != null,
+                                supportingText = if (attemptedSubmitStep3 && emailFieldError != null) {
+                                    { Text(emailFieldError ?: "") }
+                                } else if (isGoogleSignUp) {
+                                    { Text("Cuenta verificada con Google (no editable)") }
+                                } else {
+                                    { Text("Debe ser un correo válido para activar tu cuenta.") }
+                                },
+                                placeholder = { Text("ejemplo@gmail.com") },
+                                leadingIcon = { Icon(Icons.Default.AlternateEmail, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                            )
+
+                            if (!isGoogleSignUp) {
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                // Contraseña
+                                Text("Contraseña:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                OutlinedTextField(
+                                    value = password,
+                                    onValueChange = {
+                                        password = it
+                                        if (attemptedSubmitStep3) {
+                                            passwordFieldError = AuthValidation.passwordError(password)
+                                        }
+                                    },
+                                    placeholder = { Text("Mínimo 8 caracteres") },
+                                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                    trailingIcon = {
+                                        val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                            Icon(imageVector = image, contentDescription = "Mostrar contraseña")
+                                        }
+                                    },
+                                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                    singleLine = true,
+                                    isError = attemptedSubmitStep3 && passwordFieldError != null,
+                                    supportingText = if (attemptedSubmitStep3 && passwordFieldError != null) { { Text(passwordFieldError ?: "") } } else null,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(14.dp),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Password Strength Meter (4 Segmented Bars)
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    val filledColor1 = if (strengthLevel >= 1) strengthColor else MaterialTheme.colorScheme.outlineVariant
+                                    Box(modifier = Modifier.weight(1f).height(4.dp).background(filledColor1, RoundedCornerShape(50)))
+
+                                    val filledColor2 = if (strengthLevel >= 2) strengthColor else MaterialTheme.colorScheme.outlineVariant
+                                    Box(modifier = Modifier.weight(1f).height(4.dp).background(filledColor2, RoundedCornerShape(50)))
+
+                                    val filledColor3 = if (strengthLevel >= 3) strengthColor else MaterialTheme.colorScheme.outlineVariant
+                                    Box(modifier = Modifier.weight(1f).height(4.dp).background(filledColor3, RoundedCornerShape(50)))
+
+                                    val filledColor4 = if (strengthLevel >= 4) strengthColor else MaterialTheme.colorScheme.outlineVariant
+                                    Box(modifier = Modifier.weight(1f).height(4.dp).background(filledColor4, RoundedCornerShape(50)))
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = strengthText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = strengthColor,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                // Confirmar Contraseña
+                                val isConfirmMismatch = confirmPassword.isNotEmpty() && confirmPassword != password
+                                Text("Confirmar Contraseña:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                OutlinedTextField(
+                                    value = confirmPassword,
+                                    onValueChange = {
+                                        confirmPassword = it
+                                        if (attemptedSubmitStep3) {
+                                            confirmPasswordError = AuthValidation.confirmPasswordError(password, confirmPassword)
+                                        }
+                                    },
+                                    placeholder = { Text("Repite tu contraseña") },
+                                    leadingIcon = { Icon(Icons.Default.LockReset, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                    trailingIcon = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (confirmPassword.isNotEmpty() && confirmPassword == password) {
+                                                Icon(
+                                                    imageVector = Icons.Default.CheckCircle,
+                                                    contentDescription = "Contraseñas coinciden",
+                                                    tint = Color(0xFF2E7D32),
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                            val image = if (confirmPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                                            IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                                                Icon(imageVector = image, contentDescription = "Mostrar contraseña")
+                                            }
+                                        }
+                                    },
+                                    visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                    singleLine = true,
+                                    isError = isConfirmMismatch || (attemptedSubmitStep3 && confirmPasswordError != null),
+                                    supportingText = if (isConfirmMismatch) {
+                                        { Text("Las contraseñas no coinciden") }
+                                    } else if (attemptedSubmitStep3 && confirmPasswordError != null) {
+                                        { Text(confirmPasswordError ?: "") }
+                                    } else null,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(14.dp),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // Resumen del Registro Universitario
+                            ElevatedCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Icon(Icons.Default.Badge, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                        Text("Ficha de Registro", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                    }
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        UserAvatar(
+                                            photoUri = null,
+                                            name = "$firstName $lastName",
+                                            size = 46.dp,
+                                            fontSize = 18.sp
+                                        )
+                                        Column {
+                                            Text(
+                                                text = "${firstName.trim()} ${lastName.trim()}".ifBlank { "Estudiante" },
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "${effectiveCareer()} • $selectedCycle",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Text(
+                                                text = "Semestre: $semester • ${effectivePhone()}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Términos de Servicio y Privacidad
+                            Surface(
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, if (attemptedSubmitStep3 && termsError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant)
+                            ) {
+                                Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
+                                    Checkbox(
+                                        checked = acceptTerms,
+                                        onCheckedChange = { acceptTerms = it },
+                                        colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary),
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                    Column {
+                                        Text("Acepto Términos de Servicio y Sincronización", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                        Text("Cifrado de extremo a extremo, políticas de privacidad y sincronización académica.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                            if (attemptedSubmitStep3 && termsError != null) {
+                                Text(
+                                    text = termsError ?: "",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(start = 14.dp, top = 4.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(28.dp))
+
+                            // Step 3 Action Buttons
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                OutlinedButton(
+                                    onClick = { currentStep = 2 },
+                                    modifier = Modifier.weight(0.7f).height(52.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.outlineVariant),
+                                    enabled = uiState !is RegisterViewModel.RegisterUiState.Loading
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Atrás", fontWeight = FontWeight.Bold)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        attemptedSubmitStep3 = true
+                                        if (!validateStep1()) {
+                                            currentStep = 1
+                                            return@Button
+                                        }
+                                        if (!validateStep2()) {
+                                            currentStep = 2
+                                            return@Button
+                                        }
+                                        if (!validateStep3()) {
+                                            return@Button
+                                        }
+
+                                        if (isGoogleSignUp) {
+                                            viewModel.completeGoogleRegistration(
+                                                firstName = firstName, lastName = lastName, email = email,
+                                                phone = effectivePhone(), career = effectiveCareer(), semester = semester, cycle = selectedCycle,
+                                                startDate = startDate, endDate = endDate
+                                            )
+                                        } else {
+                                            showConfirmEmailDialog = true
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1.3f).height(52.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    enabled = isStep3Complete && uiState !is RegisterViewModel.RegisterUiState.Loading,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                                    )
+                                ) {
+                                    if (uiState is RegisterViewModel.RegisterUiState.Loading) {
+                                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                    } else {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text(
+                                                text = if (isGoogleSignUp) "Completar con Google" else "Crear Cuenta",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (!isStep3Complete) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = if (isGoogleSignUp) {
+                                        "Acepta los términos de servicio para completar tu cuenta"
+                                    } else {
+                                        "Ingresa correo, contraseña (mínimo 8 caracteres) y acepta los términos"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = {
-                    attemptedSubmit = true
-                    if (!validateRegisterFields()) {
-                        return@Button
-                    }
-                    if (isGoogleSignUp) {
-                        viewModel.completeGoogleRegistration(
-                            firstName = firstName, lastName = lastName, email = email,
-                            phone = effectivePhone(), career = effectiveCareer(), semester = semester, cycle = selectedCycle,
-                            startDate = startDate, endDate = endDate
-                        )
-                    } else {
-                        // Antes de registrar o enviar enlace, mostrar modal de confirmación de correo
-                        showConfirmEmailDialog = true
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                enabled = uiState !is RegisterViewModel.RegisterUiState.Loading && email.isNotBlank() && acceptTerms
-            ) {
-                if (uiState is RegisterViewModel.RegisterUiState.Loading) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(if (isGoogleSignUp) "Completar Registro con Google" else "Registrar y Comenzar Ciclo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 
-    // DatePickers with UTC TimeZone conversion & dynamic month/year centering
+    // DatePickers with UTC TimeZone conversion & dynamic centering
     if (showStartDatePicker) {
         val startInitialMillis = remember(startDate) {
             val localDate = AuthValidation.parseDate(startDate) ?: java.time.LocalDate.now()
@@ -1245,13 +1567,12 @@ fun RegisterScreen(
                     val formatted = sdfUtc.format(cal.time)
                     startDate = formatted
 
-                    // El ciclo universitario dura 16 semanas fijas de clases (112 días)
                     val parsed = AuthValidation.parseDate(formatted)
                     if (parsed != null) {
                         endDate = parsed.plusWeeks(16).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
                     }
 
-                    if (attemptedSubmit) {
+                    if (attemptedSubmitStep2) {
                         startDateError = AuthValidation.startDateError(startDate)
                         if (endDate.isNotBlank()) {
                             endDateError = AuthValidation.endDateError(startDate, endDate)
@@ -1282,7 +1603,7 @@ fun RegisterScreen(
                         timeInMillis = millis
                     }
                     endDate = sdfUtc.format(cal.time)
-                    if (attemptedSubmit) {
+                    if (attemptedSubmitStep2) {
                         endDateError = AuthValidation.endDateError(startDate, endDate)
                     }
                     showEndDatePicker = false
@@ -1290,5 +1611,134 @@ fun RegisterScreen(
             },
             dismissButton = { TextButton(onClick = { showEndDatePicker = false }) { Text("Cancelar") } }
         ) { DatePicker(state = currentEndDatePickerState) }
+    }
+}
+
+/**
+ * Modern, interactive Registration Timeline component showing progression across
+ * Step 1 (Personal), Step 2 (Académico), and Step 3 (Seguridad).
+ */
+@Composable
+fun RegistrationTimeline(
+    currentStep: Int,
+    onStepClick: (Int) -> Unit = {}
+) {
+    val steps = listOf(
+        Triple(1, "Personal", Icons.Default.Person),
+        Triple(2, "Académico", Icons.Default.School),
+        Triple(3, "Seguridad", Icons.Default.Security)
+    )
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                steps.forEachIndexed { index, (stepNum, label, icon) ->
+                    val isCompleted = currentStep > stepNum
+                    val isActive = currentStep == stepNum
+
+                    // Step Node
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clickable(enabled = isCompleted) { onStepClick(stepNum) }
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    when {
+                                        isCompleted -> Color(0xFF2E7D32)
+                                        isActive -> MaterialTheme.colorScheme.primary
+                                        else -> MaterialTheme.colorScheme.surfaceVariant
+                                    }
+                                )
+                                .then(
+                                    if (isActive) Modifier.border(2.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), CircleShape)
+                                    else Modifier
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isCompleted) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Paso completado",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = if (isActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
+                            color = when {
+                                isActive -> MaterialTheme.colorScheme.primary
+                                isCompleted -> Color(0xFF2E7D32)
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+
+                    // Connector line between step nodes
+                    if (index < steps.size - 1) {
+                        val lineFilled = currentStep > stepNum
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(3.dp)
+                                .padding(horizontal = 8.dp)
+                                .padding(bottom = 18.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(
+                                    if (lineFilled) Color(0xFF2E7D32)
+                                    else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Progress bar
+            val progress = when (currentStep) {
+                1 -> 0.33f
+                2 -> 0.66f
+                else -> 1f
+            }
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(50)),
+                color = if (currentStep == 3) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            )
+        }
     }
 }

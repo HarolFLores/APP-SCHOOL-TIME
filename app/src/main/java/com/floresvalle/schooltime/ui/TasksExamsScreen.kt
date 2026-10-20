@@ -24,11 +24,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.floresvalle.schooltime.data.entity.ExamEntity
 import com.floresvalle.schooltime.data.entity.TaskEntity
 import com.floresvalle.schooltime.ui.components.ExamDetailEditDialog
 import com.floresvalle.schooltime.ui.components.GradeConfirmationDialog
 import com.floresvalle.schooltime.ui.components.TaskDetailEditDialog
+import com.floresvalle.schooltime.ui.components.UserAvatar
 import com.floresvalle.schooltime.viewmodel.SessionViewModel
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -50,6 +52,8 @@ fun TasksExamsScreen(
     val dbExams by viewModel.exams.collectAsState()
     val liveNotifications by viewModel.liveNotifications.collectAsState()
     val unreadNotifCount = liveNotifications.count { !it.isRead }
+    val userData by viewModel.currentUserData.collectAsState()
+    val userName = userData?.let { "${it.firstName} ${it.lastName}".trim() }?.ifBlank { null } ?: "Estudiante"
 
     // Dialog States
     var taskForGrade by remember { mutableStateOf<TaskEntity?>(null) }
@@ -103,16 +107,21 @@ fun TasksExamsScreen(
                         }
                     }
                     Box(contentAlignment = Alignment.BottomEnd, modifier = Modifier.clickable { onOpenQuickProfile() }) {
+                        UserAvatar(
+                            photoUri = userData?.photoUri,
+                            name = userName,
+                            size = 36.dp,
+                            fontSize = 15.sp
+                        )
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(11.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary),
-                            contentAlignment = Alignment.Center
+                                .background(MaterialTheme.colorScheme.surface)
+                                .padding(1.5.dp)
                         ) {
-                            Icon(Icons.Default.Person, contentDescription = "Perfil", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                            Box(modifier = Modifier.fillMaxSize().clip(CircleShape).background(Color(0xFF2E7D32)))
                         }
-                        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF2E7D32)).padding(2.dp))
                     }
                 }
             }
